@@ -212,15 +212,29 @@ async function deleteSchool(schoolId) {
   const result = await apiFetch(`/api/school/${schoolId}`, {}, 'DELETE');
   if (result.error) { alert(result.error); return; }
   closeDrawer();
-  GRIMOIRE_DATA = GRIMOIRE_DATA.filter(s => s.id !== schoolId);
+  schools = schools.filter(s => s.id !== schoolId);
   const card = document.getElementById(`card-${schoolId}`);
   if (card) card.remove();
+  renderMenu();
+}
+
+function updateRecalBanish() {
+  const sel = document.getElementById('recal-school-select');
+  const btn = document.getElementById('recal-banish-btn');
+  if (!sel || !btn) return;
+  const school = getSchool(parseInt(sel.value));
+  btn.style.display = (school && school.is_custom) ? '' : 'none';
+}
+
+async function banishSelectedSchool() {
+  const sel = document.getElementById('recal-school-select');
+  if (!sel) return;
+  await deleteSchool(parseInt(sel.value));
 }
 
 function renderDrawer() {
   const school = getSchool(activeSchoolId);
   if (!school) return;
-  console.log('[Grimoire] school id:', school.id, 'name:', school.name, 'is_custom:', school.is_custom, typeof school.is_custom);
   const rank   = school.rank || getRank(school.level);
   const xpPct  = Math.min(100, (school.xp_in_level / XP_PER_LEVEL) * 100);
 
@@ -283,7 +297,6 @@ function renderDrawer() {
            style="width:${xpPct}%;background:linear-gradient(90deg,${school.color}70,${school.color});box-shadow:0 0 6px ${school.color}50;">
       </div>
     </div>
-    ${school.is_custom ? `<button class="banish-school-btn" style="margin-bottom:14px;" onclick="deleteSchool(${school.id})">BANISH THIS SCHOOL</button>` : ''}
     <div class="oracle-section-label" style="margin-bottom:8px;">PERFORM AN INCANTATION</div>
     <div class="habit-list" id="habit-list">${spellsHtml}</div>
     <div class="divider" style="margin:0 0 14px;"></div>
@@ -534,6 +547,7 @@ function renderAugurTab() {
     <div class="augur-panel-sub">Seek counsel. Forge new paths.</div>
     ${renderRecalibrateSection()}
     ${renderDiscoverSection()}`;
+  updateRecalBanish();
 }
 
 function renderRecalibrateSection() {
@@ -585,11 +599,12 @@ function renderRecalibrateSection() {
       <div class="augur-section-sub">
         The Augur will reforge a school's incantations based on your level, history, and any guidance you provide.
       </div>
-      <select class="school-select" id="recal-school-select">${schoolOptions}</select>
+      <select class="school-select" id="recal-school-select" onchange="updateRecalBanish()">${schoolOptions}</select>
       <textarea class="oracle-input" id="recal-context-input" rows="3"
         placeholder="Guidance for the Augur (optional) \u2014 e.g. \u2018I\u2019ve started training for a marathon\u2019"
         style="width:100%;margin-bottom:10px;"></textarea>
-      <div style="display:flex;justify-content:flex-end;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <button class="banish-school-btn recal-banish-btn" id="recal-banish-btn" onclick="banishSelectedSchool()" style="display:none;">BANISH</button>
         <button class="oracle-submit" onclick="doAugurRecalibrate()">&#10022; CONSULT THE AUGUR</button>
       </div>
     </div>`;
