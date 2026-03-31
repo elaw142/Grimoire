@@ -212,6 +212,11 @@ a:hover { color: #e8d5a8; }
   .site-header { padding: 22px 24px 16px; }
   .header-name { font-size: 26px; }
   .hstat-value { font-size: 20px; }
+  .stat-card:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+    justify-self: center;
+    width: calc(50% - 4px);
+  }
 }
 
 @media (min-width: 900px) {
