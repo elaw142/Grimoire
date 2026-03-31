@@ -195,7 +195,7 @@ def require_login_api(f):
     return decorated
 
 
-def call_augur(system_prompt, user_prompt):
+def call_augur(system_prompt, user_prompt, num_predict=600):
     full_prompt = f"{system_prompt}\n\n{user_prompt}"
     try:
         resp = requests.post(OLLAMA_URL, json={
@@ -203,7 +203,7 @@ def call_augur(system_prompt, user_prompt):
             'prompt': full_prompt,
             'stream': False,
             'format': 'json',
-            'options': {'temperature': 0.7, 'num_predict': 600},
+            'options': {'temperature': 0.7, 'num_predict': num_predict},
         }, timeout=90)
         resp.raise_for_status()
         raw = resp.json().get('response', '')
@@ -698,7 +698,11 @@ def api_augur_title():
         'Bestow a title that is HONEST about current rank.'
     )
 
-    result = call_augur(system, user_msg)
+    # Clear cached title so a page refresh shows loading state while generating
+    db.execute('UPDATE users SET ai_title=NULL WHERE id=?', (user_id,))
+    db.commit()
+
+    result = call_augur(system, user_msg, num_predict=30)
     if not result or 'title' not in result:
         return jsonify({'error': 'The Augur could not bestow a title.'}), 503
 
