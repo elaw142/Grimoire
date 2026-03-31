@@ -147,7 +147,6 @@ function updateHeaderStats() {
 async function refreshAITitle() {
   const el = document.getElementById('header-ai-title');
   if (!el) return;
-  el.innerHTML = '<span class="title-generating">&#10022;</span>';
   const result = await apiFetch('/api/augur/title', {});
   if (result.title) el.textContent = result.title;
 }

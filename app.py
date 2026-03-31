@@ -382,7 +382,7 @@ def index():
     overall_rank = get_rank(avg_level)
 
     user_row = db.execute('SELECT ai_title FROM users WHERE id=?', (user_id,)).fetchone()
-    ai_title = user_row['ai_title'] if user_row and user_row['ai_title'] else None
+    ai_title = user_row['ai_title'] if user_row and user_row['ai_title'] else compute_title(schools)
 
     return render_template(
         'index.html',
@@ -657,6 +657,77 @@ def api_augur_school_confirm():
     })
 
 
+# Titles per school per rank. Custom schools fall back to generic track.
+SCHOOL_TITLES = {
+    'Restoration': {
+        'F': 'Weary Mender',       'E': 'Initiate of Restoration',
+        'D': 'Apprentice Healer',  'C': 'Practitioner of Restoration',
+        'B': 'Adept of Restoration', 'A': 'Master Healer',
+        'S': 'Sovereign of Restoration',
+    },
+    'Transmutation': {
+        'F': 'Untested Forger',    'E': 'Initiate of Transmutation',
+        'D': 'Apprentice Forger',  'C': 'Practitioner of Transmutation',
+        'B': 'Adept of Transmutation', 'A': 'Master Transmuter',
+        'S': 'Sovereign of Transmutation',
+    },
+    'Divination': {
+        'F': 'Clouded Seer',       'E': 'Initiate of Divination',
+        'D': 'Apprentice Seer',    'C': 'Practitioner of Divination',
+        'B': 'Adept of Divination', 'A': 'Master Diviner',
+        'S': 'Sovereign of Divination',
+    },
+    'Artifice': {
+        'F': 'Rough Craftsman',    'E': 'Initiate of Artifice',
+        'D': 'Apprentice Artificer', 'C': 'Practitioner of Artifice',
+        'B': 'Adept of Artifice',  'A': 'Master Artificer',
+        'S': 'Sovereign of Artifice',
+    },
+    'Enchantment': {
+        'F': 'Unbound Soul',       'E': 'Initiate of Enchantment',
+        'D': 'Apprentice Enchanter', 'C': 'Practitioner of Enchantment',
+        'B': 'Adept of Enchantment', 'A': 'Master Enchanter',
+        'S': 'Sovereign of Enchantment',
+    },
+}
+
+# Generic titles for custom schools or well-rounded characters
+BALANCED_TITLES = {
+    'F': 'Unproven Initiate',   'E': 'Apprentice of the Arcane',
+    'D': 'Journeyman Mage',     'C': 'Arcane Practitioner',
+    'B': 'Arcane Adept',        'A': 'Master of the Arcane',
+    'S': 'Archmage',
+}
+
+CUSTOM_SCHOOL_TITLES = {
+    'F': 'Fledgling Initiate',  'E': 'Initiate of {name}',
+    'D': 'Apprentice of {name}', 'C': 'Practitioner of {name}',
+    'B': 'Adept of {name}',     'A': 'Master of {name}',
+    'S': 'Sovereign of {name}',
+}
+
+
+def compute_title(schools):
+    if not schools:
+        return 'Unproven Initiate'
+    dominant = max(schools, key=lambda s: s['level'])
+    others = [s for s in schools if s['id'] != dominant['id']]
+    avg_others_level = round(sum(s['level'] for s in others) / len(others)) if others else dominant['level']
+    is_specialised = get_rank(dominant['level'])['name'] != get_rank(avg_others_level)['name']
+    overall_rank = get_rank(round(sum(s['level'] for s in schools) / len(schools)))['name']
+
+    if not is_specialised:
+        return BALANCED_TITLES.get(overall_rank, 'Arcane Practitioner')
+
+    rank = dominant['rank']['name']
+    name = dominant['name']
+    if name in SCHOOL_TITLES:
+        return SCHOOL_TITLES[name].get(rank, f'Initiate of {name}')
+    # Custom school
+    template = CUSTOM_SCHOOL_TITLES.get(rank, 'Initiate of {name}')
+    return template.format(name=name)
+
+
 @app.route('/api/augur/title', methods=['POST'])
 @require_login_api
 def api_augur_title():
@@ -666,53 +737,7 @@ def api_augur_title():
     if not schools:
         return jsonify({'error': 'No schools found'}), 400
 
-    dominant = max(schools, key=lambda s: s['level'])
-    others = [s for s in schools if s['id'] != dominant['id']]
-    avg_others_level = round(sum(s['level'] for s in others) / len(others)) if others else dominant['level']
-    is_specialised = get_rank(dominant['level'])['name'] != get_rank(avg_others_level)['name']
-    dominant_rank = dominant['rank']['name']
-
-    if is_specialised:
-        focus = f'specialised in {dominant["name"]} ({dominant_rank}-rank), all other schools are lower rank'
-    else:
-        ranks_list = ', '.join(f'{s["name"]} {s["rank"]["name"]}' for s in schools)
-        focus = f'broadly balanced — {ranks_list}'
-
-    rank_to_word = {
-        'F': 'a raw beginner',
-        'E': 'showing early promise',
-        'D': 'capable',
-        'C': 'competent',
-        'B': 'skilled',
-        'A': 'elite',
-        'S': 'legendary',
-    }
-    overall_rank = get_rank(round(sum(s['level'] for s in schools) / len(schools)))
-    standing = rank_to_word.get(overall_rank['name'], 'developing')
-
-    system = (
-        'You are a dark fantasy title-giver. Return ONLY valid JSON: {"title":"string"}. '
-        'Use classic, grounded fantasy titles — no flowery metaphors or poetic imagery. '
-        'Use standard title structures like: '
-        '"Initiate of X", "Apprentice of X", "Practitioner of X", "Adept of X", '
-        '"Master of X", "Keeper of X", "Warden of X", "Scholar of X", "Disciple of X". '
-        'For balanced heroes use: "Initiate", "Journeyman", "Adept", "Arcane Scholar", "Pathwalker". '
-        'Replace X with the school name exactly. No invented words, no metaphors. No markdown.'
-    )
-    user_msg = (
-        f'Hero is {standing} ({overall_rank["name"]}-rank). {focus}.\n'
-        f'Pick the most fitting standard title from the examples above.'
-    )
-
-    # Clear cached title so a page refresh shows loading state while generating
-    db.execute('UPDATE users SET ai_title=NULL WHERE id=?', (user_id,))
-    db.commit()
-
-    result = call_augur(system, user_msg, num_predict=50)
-    if not result or 'title' not in result:
-        return jsonify({'error': 'The Augur could not bestow a title.'}), 503
-
-    title = str(result['title'])[:60]
+    title = compute_title(schools)
     db.execute('UPDATE users SET ai_title=? WHERE id=?', (title, user_id))
     db.commit()
     return jsonify({'title': title})
