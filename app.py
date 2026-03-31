@@ -690,10 +690,18 @@ def api_augur_title():
     overall_rank = get_rank(round(sum(s['level'] for s in schools) / len(schools)))
     standing = rank_to_word.get(overall_rank['name'], 'developing')
 
-    system = 'You are a dark fantasy title-giver. Return ONLY valid JSON: {"title":"string"}. 2-4 word title. No markdown.'
+    system = (
+        'You are a dark fantasy title-giver. Return ONLY valid JSON: {"title":"string"}. '
+        'Use classic, grounded fantasy titles — no flowery metaphors or poetic imagery. '
+        'Use standard title structures like: '
+        '"Initiate of X", "Apprentice of X", "Practitioner of X", "Adept of X", '
+        '"Master of X", "Keeper of X", "Warden of X", "Scholar of X", "Disciple of X". '
+        'For balanced heroes use: "Initiate", "Journeyman", "Adept", "Arcane Scholar", "Pathwalker". '
+        'Replace X with the school name exactly. No invented words, no metaphors. No markdown.'
+    )
     user_msg = (
-        f'Hero is {standing} ({overall_rank["name"]}-rank overall). {focus}.\n'
-        f'Give a dark fantasy title that fits their rank and focus. Be specific to the school name.'
+        f'Hero is {standing} ({overall_rank["name"]}-rank). {focus}.\n'
+        f'Pick the most fitting standard title from the examples above.'
     )
 
     # Clear cached title so a page refresh shows loading state while generating
