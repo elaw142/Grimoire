@@ -220,6 +220,7 @@ async function deleteSchool(schoolId) {
 function renderDrawer() {
   const school = getSchool(activeSchoolId);
   if (!school) return;
+  console.log('[Grimoire] school id:', school.id, 'name:', school.name, 'is_custom:', school.is_custom, typeof school.is_custom);
   const rank   = school.rank || getRank(school.level);
   const xpPct  = Math.min(100, (school.xp_in_level / XP_PER_LEVEL) * 100);
 
@@ -282,11 +283,11 @@ function renderDrawer() {
            style="width:${xpPct}%;background:linear-gradient(90deg,${school.color}70,${school.color});box-shadow:0 0 6px ${school.color}50;">
       </div>
     </div>
+    ${school.is_custom ? `<button class="banish-school-btn" style="margin-bottom:14px;" onclick="deleteSchool(${school.id})">BANISH THIS SCHOOL</button>` : ''}
     <div class="oracle-section-label" style="margin-bottom:8px;">PERFORM AN INCANTATION</div>
     <div class="habit-list" id="habit-list">${spellsHtml}</div>
     <div class="divider" style="margin:0 0 14px;"></div>
-    ${oracleSection}
-    ${school.is_custom ? `<div class="divider" style="margin:14px 0 10px;"></div><button class="banish-school-btn" onclick="deleteSchool(${school.id})">BANISH THIS SCHOOL</button>` : ''}`;
+    ${oracleSection}`;
 
   if (!pendingVerdict) {
     const inp = document.getElementById('deed-input');
