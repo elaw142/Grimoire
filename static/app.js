@@ -27,6 +27,9 @@ let augurState = {
 // Misc
 let bannerTimer = null;
 
+// Pending recalibration (level-up flow)
+let pendingRecal = null; // { schoolId, schoolName, spells }
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function getSchool(id) { return schools.find(s => s.id === id); }
 
@@ -368,10 +371,45 @@ async function triggerRecalibrate(schoolId, context) {
   const result = await apiFetch('/api/augur/recalibrate', { school_id: schoolId, context: context || '' });
   if (spinnerEl) spinnerEl.style.display = 'none';
   if (result.error || !result.spells) return result;
+  // Show accept/deny panel instead of auto-saving
+  const school = getSchool(schoolId);
+  pendingRecal = { schoolId, schoolName: school?.name || '', spells: result.spells };
+  showRecalPanel();
+  return result;
+}
+
+function showRecalPanel() {
+  if (!pendingRecal) return;
+  const { schoolName, spells } = pendingRecal;
+  const spellRows = spells.map(sp => `
+    <div class="augur-spell-row">
+      <span class="augur-spell-name-wrap">
+        <span>${escHtml(sp.name)}</span>
+        ${sp.description ? `<span class="augur-spell-desc">${escHtml(sp.description)}</span>` : ''}
+      </span>
+      <span class="augur-spell-xp">+${sp.xp} XP</span>
+    </div>`).join('');
+
+  const panel = document.getElementById('recal-panel');
+  document.getElementById('recal-panel-school').textContent = schoolName.toUpperCase();
+  document.getElementById('recal-panel-spells').innerHTML = spellRows;
+  panel.classList.remove('hidden');
+}
+
+async function acceptRecal() {
+  if (!pendingRecal) return;
+  const { schoolId, spells } = pendingRecal;
+  const result = await apiFetch('/api/augur/recalibrate/confirm', { school_id: schoolId, spells });
+  if (result.error) return;
   const school = getSchool(schoolId);
   if (school) school.spells = result.spells;
   if (activeSchoolId === schoolId) renderDrawer();
-  return result;
+  dismissRecal();
+}
+
+function dismissRecal() {
+  pendingRecal = null;
+  document.getElementById('recal-panel').classList.add('hidden');
 }
 
 // ── Side menu ─────────────────────────────────────────────────────────────────
@@ -594,8 +632,9 @@ function renderRecalibrateSection() {
           <div class="augur-result-label">REFORGED INCANTATIONS &mdash; ${escHtml(st.recalResult.schoolName)}</div>
           ${spellRows}
         </div>
-        <div style="margin-top:12px;display:flex;justify-content:flex-end;">
-          <button class="consult-btn" onclick="resetRecal()">RECALIBRATE ANOTHER</button>
+        <div style="margin-top:12px;display:flex;justify-content:flex-end;gap:8px;">
+          <button class="consult-btn" onclick="resetRecal()">DENY</button>
+          <button class="oracle-submit" onclick="confirmRecal()">ACCEPT</button>
         </div>
       </div>`;
   }
@@ -711,7 +750,18 @@ async function doAugurRecalibrate() {
   }
 
   const school = getSchool(schoolId);
-  augurState.recalResult = { schoolName: school?.name || '', spells: result.spells };
+  augurState.recalResult = { schoolId, schoolName: school?.name || '', spells: result.spells };
+  renderAugurTab();
+}
+
+async function confirmRecal() {
+  const { schoolId, spells } = augurState.recalResult;
+  const result = await apiFetch('/api/augur/recalibrate/confirm', { school_id: schoolId, spells });
+  if (result.error) { alert(result.error); return; }
+  const school = getSchool(schoolId);
+  if (school) school.spells = result.spells;
+  if (activeSchoolId === schoolId) renderDrawer();
+  augurState.recalResult = null;
   renderAugurTab();
 }
 

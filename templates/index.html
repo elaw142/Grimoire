@@ -108,6 +108,20 @@
   </div>
 </div>
 
+<!-- Recalibration accept/deny panel -->
+<div id="recal-panel" class="recal-panel hidden">
+  <div class="recal-panel-inner">
+    <div class="recal-panel-eyebrow">THE AUGUR PROPOSES</div>
+    <div class="recal-panel-school" id="recal-panel-school"></div>
+    <div class="recal-panel-sub">New incantations have been forged. Accept or deny.</div>
+    <div class="recal-panel-spells" id="recal-panel-spells"></div>
+    <div class="recal-panel-actions">
+      <button class="consult-btn" onclick="dismissRecal()">DENY</button>
+      <button class="oracle-submit" onclick="acceptRecal()">ACCEPT</button>
+    </div>
+  </div>
+</div>
+
 <!-- Floating XP -->
 <div id="floating-xp" class="floating-xp hidden"></div>
 

@@ -767,6 +767,63 @@ a:hover { color: #e8d5a8; }
 }
 
 /* ── Level-up banner ──────────────────────────────────────────────────────── */
+/* ── Recalibration panel ──────────────────────────────────────────────────── */
+.recal-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(0,0,0,0.6);
+  animation: fadein 0.2s ease;
+}
+
+.recal-panel.hidden { display: none; }
+
+.recal-panel-inner {
+  background: #100e0a;
+  border: 1px solid rgba(201,162,39,0.25);
+  border-bottom: none;
+  border-radius: 10px 10px 0 0;
+  width: 100%;
+  max-width: 580px;
+  padding: 22px 20px 28px;
+  animation: slideup 0.2s cubic-bezier(.4,0,.2,1);
+}
+
+.recal-panel-eyebrow {
+  font-family: 'Cinzel', serif;
+  font-size: 10px;
+  letter-spacing: 3px;
+  color: #7a6a50;
+  margin-bottom: 6px;
+}
+
+.recal-panel-school {
+  font-family: 'Cinzel', serif;
+  font-size: 18px;
+  font-weight: 700;
+  color: #c9a227;
+  margin-bottom: 4px;
+}
+
+.recal-panel-sub {
+  font-size: 13px;
+  color: #7a6a50;
+  margin-bottom: 16px;
+}
+
+.recal-panel-spells {
+  margin-bottom: 18px;
+}
+
+.recal-panel-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .levelup-banner {
   position: fixed;
   top: 0; left: 0; right: 0;

@@ -484,26 +484,9 @@ def api_augur_accept():
     return jsonify(result)
 
 
-@app.route('/api/augur/recalibrate', methods=['POST'])
-@require_login_api
-def api_augur_recalibrate():
-    user_id = session['user_id']
-    data = request.get_json()
-    school_id = data.get('school_id')
-
-    db = get_db()
-    school = db.execute(
-        'SELECT * FROM schools WHERE id=? AND user_id=?', (school_id, user_id)
-    ).fetchone()
-    if not school:
-        return jsonify({'error': 'Not found'}), 404
-
-    xp_row = db.execute(
-        'SELECT xp FROM user_xp WHERE user_id=? AND school_id=?', (user_id, school_id)
-    ).fetchone()
-    current_xp = xp_row['xp'] if xp_row else 0
-    level = get_level(current_xp)
-
+def _generate_recal_spells(school, level, context, db, user_id):
+    """Generate recalibrated spells via AI. Returns list of spell dicts or None on failure."""
+    school_id = school['id']
     deed_rows = db.execute(
         'SELECT deed_name FROM deed_log WHERE user_id=? AND school_id=? ORDER BY cast_at DESC LIMIT 20',
         (user_id, school_id),
@@ -512,8 +495,6 @@ def api_augur_recalibrate():
     for row in deed_rows:
         freq[row['deed_name']] = freq.get(row['deed_name'], 0) + 1
     summary = ', '.join(f'"{k}" \xd7{v}' for k, v in freq.items()) or 'none yet'
-
-    context = data.get('context', '').strip()
 
     system = (
         'You are the Augur — a dark fantasy sage calibrating a hero\'s training regimen. '
@@ -541,7 +522,7 @@ def api_augur_recalibrate():
 
     result = call_augur(system, user_msg)
     if not result or 'spells' not in result or not result['spells']:
-        return jsonify({'error': 'The Augur could not recalibrate at this time.'}), 503
+        return None
 
     spells = []
     for sp in result['spells'][:5]:
@@ -551,9 +532,11 @@ def api_augur_recalibrate():
                 'description': str(sp.get('description', ''))[:120],
                 'xp': max(10, min(50, int(sp['xp']))),
             })
-    if not spells:
-        return jsonify({'error': 'The Augur returned no valid spells.'}), 503
+    return spells or None
 
+
+def _save_recal_spells(db, school_id, spells):
+    """Persist spell list to DB, returning spells with IDs."""
     db.execute('DELETE FROM spells WHERE school_id=?', (school_id,))
     new_spells = []
     for sp in spells:
@@ -561,9 +544,62 @@ def api_augur_recalibrate():
             'INSERT INTO spells (school_id, name, xp) VALUES (?,?,?)',
             (school_id, sp['name'], sp['xp']),
         )
-        new_spells.append({'id': cur.lastrowid, 'name': sp['name'], 'description': sp['description'], 'xp': sp['xp'], 'school_id': school_id})
+        new_spells.append({
+            'id': cur.lastrowid, 'name': sp['name'],
+            'description': sp['description'], 'xp': sp['xp'], 'school_id': school_id,
+        })
     db.commit()
+    return new_spells
 
+
+@app.route('/api/augur/recalibrate', methods=['POST'])
+@require_login_api
+def api_augur_recalibrate():
+    """Preview recalibrated spells without saving — returns proposed spells for user to accept/deny."""
+    user_id = session['user_id']
+    data = request.get_json()
+    school_id = data.get('school_id')
+
+    db = get_db()
+    school = db.execute(
+        'SELECT * FROM schools WHERE id=? AND user_id=?', (school_id, user_id)
+    ).fetchone()
+    if not school:
+        return jsonify({'error': 'Not found'}), 404
+
+    xp_row = db.execute(
+        'SELECT xp FROM user_xp WHERE user_id=? AND school_id=?', (user_id, school_id)
+    ).fetchone()
+    level = get_level(xp_row['xp'] if xp_row else 0)
+    context = data.get('context', '').strip()
+
+    spells = _generate_recal_spells(dict(school), level, context, db, user_id)
+    if not spells:
+        return jsonify({'error': 'The Augur could not recalibrate at this time.'}), 503
+
+    return jsonify({'spells': spells})
+
+
+@app.route('/api/augur/recalibrate/confirm', methods=['POST'])
+@require_login_api
+def api_augur_recalibrate_confirm():
+    """Accept and save a previewed recalibration."""
+    user_id = session['user_id']
+    data = request.get_json()
+    school_id = data.get('school_id')
+    spells = data.get('spells', [])
+
+    if not spells:
+        return jsonify({'error': 'No spells provided'}), 400
+
+    db = get_db()
+    school = db.execute(
+        'SELECT * FROM schools WHERE id=? AND user_id=?', (school_id, user_id)
+    ).fetchone()
+    if not school:
+        return jsonify({'error': 'Not found'}), 404
+
+    new_spells = _save_recal_spells(db, school_id, spells)
     return jsonify({'spells': new_spells})
 
 

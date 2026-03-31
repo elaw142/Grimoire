@@ -18,7 +18,6 @@
 
 ---
 
-
 ## ⚡ Performance Improvements
 
 ### 6. Improve AI Response Speed
@@ -55,7 +54,7 @@
 
 ## 📜 New Features
 
-### 9. Calendar / Timeline System
+### 10. Calendar / Timeline System
 
 - Implement a **habit consistency tracking system**
 - Options:
@@ -69,7 +68,7 @@
 
 ---
 
-### 10. Immersive Error Handling
+### 11. Immersive Error Handling
 
 - Dont use default browser pop up error messages
 - Keep **themed error states**, e.g.:
@@ -80,7 +79,7 @@
 
 ---
 
-### 11. New User Tutorial / Walkthrough
+### 12. New User Tutorial / Walkthrough
 
 - Add onboarding tutorial for new users:
   - Explain core concepts:
