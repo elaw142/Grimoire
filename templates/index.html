@@ -40,7 +40,10 @@
 
 <!-- School grid -->
 <main class="main-content">
-  <div class="section-label">SCHOOLS OF MAGIC &mdash; TAP TO CAST AN INCANTATION</div>
+  <div class="section-label">
+    <span class="section-label-full">SCHOOLS OF MAGIC &mdash; TAP TO CAST AN INCANTATION</span>
+    <span class="section-label-short">SCHOOLS OF MAGIC</span>
+  </div>
   <div class="school-grid" id="school-grid">
     {% for school in schools %}
     <div class="stat-card" id="card-{{ school.id }}"
