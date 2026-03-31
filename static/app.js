@@ -139,7 +139,7 @@ function updateHeaderStats() {
   const avgLv = Math.round(schools.reduce((a, s) => a + s.level, 0) / schools.length);
   const rank  = getRank(avgLv);
   const rankEl = document.querySelector('.header-stats .header-stat:nth-child(1) .hstat-value');
-  const lvEl   = document.querySelector('.header-stats .header-stat:nth-child(2) .hstat-value');
+  const lvEl   = document.querySelector('.header-stats .header-stat:nth-child(3) .hstat-value');
   if (rankEl) { rankEl.textContent = rank.name; rankEl.style.color = rank.color; rankEl.style.textShadow = `0 0 14px ${rank.color}70`; }
   if (lvEl)   lvEl.textContent = avgLv;
 }

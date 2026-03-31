@@ -26,21 +26,8 @@
   1. Generate **real, actionable tasks**
   2. Then transform each into a **spell name + flavour text**
 - Example:
-  - Task: "Write 500 words"
-  - Spell: _Inspiro — Grants a burst of creative flow_
+  - AI was creating the task like the following: _Inspiro — Grants a burst of creative flow_ which is not an actual task
 - Ensure all tasks remain practical and checklist-friendly.
-
----
-
-### 5. Swap Average Level and User Title
-
-- In the user profile UI:
-  - Swap the positions of:
-    - Average Level (Avg Lvl)
-    - User’s AI-generated Title
-- Ensure:
-  - The title has stronger visual hierarchy
-  - Layout remains clean and responsive
 
 ---
 

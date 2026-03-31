@@ -174,9 +174,10 @@ a:hover { color: #e8d5a8; }
 }
 
 .header-title-value {
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1.3;
   text-align: center;
+  color: #e8d5a8;
 }
 
 .hstat-pending { color: #5a5040; font-weight: 400; }
