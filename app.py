@@ -666,43 +666,41 @@ def api_augur_title():
     if not schools:
         return jsonify({'error': 'No schools found'}), 400
 
-    avg_level = round(sum(s['level'] for s in schools) / len(schools))
     dominant = max(schools, key=lambda s: s['level'])
     others = [s for s in schools if s['id'] != dominant['id']]
-    avg_others = round(sum(s['level'] for s in others) / len(others)) if others else dominant['level']
-    # Specialised if dominant is a full rank letter above the average of the rest
-    is_specialised = get_rank(dominant['level'])['name'] != get_rank(avg_others)['name']
-
-    ranks_summary = ', '.join(f'{s["name"]} ({s["rank"]["name"]}-rank LV{s["level"]})' for s in schools)
+    avg_others_level = round(sum(s['level'] for s in others) / len(others)) if others else dominant['level']
+    is_specialised = get_rank(dominant['level'])['name'] != get_rank(avg_others_level)['name']
     dominant_rank = dominant['rank']['name']
 
-    system = (
-        'You are the Augur — a dark fantasy sage bestowing titles upon heroes. '
-        'Return ONLY valid JSON: {"title":"string"}. '
-        'The title must honestly reflect CURRENT rank — do not flatter or project future greatness. '
-        'F-rank = raw beginner: "Untested Initiate", "Fledgling Seeker", "Unproven Wanderer". '
-        'E-rank = early promise: "Apprentice of X", "Emerging Practitioner", "Initiate of X". '
-        'D-rank = capable: "Journeyman of X", "Rising Wielder of X". '
-        'C-rank = competent: "Adept of X", "Seasoned Channeler of X". '
-        'B-rank = skilled: "Master of X", "Ordained Wielder". '
-        'A-rank = elite: "Exalted X", "Herald of the Unseen". '
-        'S-rank = legendary: "Eternal Sovereign", "Ascendant One". '
-        'Replace X with the dominant school name or theme. '
-        'Title must be 2-4 words. No markdown, no extra keys.'
-    )
+    if is_specialised:
+        focus = f'specialised in {dominant["name"]} ({dominant_rank}-rank), all other schools are lower rank'
+    else:
+        ranks_list = ', '.join(f'{s["name"]} {s["rank"]["name"]}' for s in schools)
+        focus = f'broadly balanced — {ranks_list}'
+
+    rank_to_word = {
+        'F': 'a raw beginner',
+        'E': 'showing early promise',
+        'D': 'capable',
+        'C': 'competent',
+        'B': 'skilled',
+        'A': 'elite',
+        'S': 'legendary',
+    }
+    overall_rank = get_rank(round(sum(s['level'] for s in schools) / len(schools)))
+    standing = rank_to_word.get(overall_rank['name'], 'developing')
+
+    system = 'You are a dark fantasy title-giver. Return ONLY valid JSON: {"title":"string"}. 2-4 word title. No markdown.'
     user_msg = (
-        f'All schools: {ranks_summary}.\n'
-        f'Dominant school: {dominant["name"]} at {dominant_rank}-rank.\n'
-        f'{"Specialised — dominant school is a full grade above the rest." if is_specialised else "Broadly similar ranks across schools."}\n'
-        f'Overall average level: {avg_level}.\n'
-        'Bestow a title that is HONEST about current rank.'
+        f'Hero is {standing} ({overall_rank["name"]}-rank overall). {focus}.\n'
+        f'Give a dark fantasy title that fits their rank and focus. Be specific to the school name.'
     )
 
     # Clear cached title so a page refresh shows loading state while generating
     db.execute('UPDATE users SET ai_title=NULL WHERE id=?', (user_id,))
     db.commit()
 
-    result = call_augur(system, user_msg, num_predict=30)
+    result = call_augur(system, user_msg, num_predict=50)
     if not result or 'title' not in result:
         return jsonify({'error': 'The Augur could not bestow a title.'}), 503
 
