@@ -195,22 +195,25 @@ def require_login_api(f):
     return decorated
 
 
-def call_augur(system_prompt, user_prompt, num_predict=600):
+def call_augur(system_prompt, user_prompt, num_predict=400, retries=1):
     full_prompt = f"{system_prompt}\n\n{user_prompt}"
-    try:
-        resp = requests.post(OLLAMA_URL, json={
-            'model': OLLAMA_MODEL,
-            'prompt': full_prompt,
-            'stream': False,
-            'format': 'json',
-            'options': {'temperature': 0.7, 'num_predict': num_predict},
-        }, timeout=90)
-        resp.raise_for_status()
-        raw = resp.json().get('response', '')
-        raw = re.sub(r'```(?:json)?', '', raw).strip('` \n')
-        return json.loads(raw)
-    except Exception:
-        return None
+    for attempt in range(retries + 1):
+        try:
+            resp = requests.post(OLLAMA_URL, json={
+                'model': OLLAMA_MODEL,
+                'prompt': full_prompt,
+                'stream': False,
+                'format': 'json',
+                'options': {'temperature': 0.7, 'num_predict': num_predict},
+            }, timeout=90)
+            resp.raise_for_status()
+            raw = resp.json().get('response', '')
+            raw = re.sub(r'```(?:json)?', '', raw).strip('` \n')
+            return json.loads(raw)
+        except Exception:
+            if attempt == retries:
+                return None
+    return None
 
 
 def get_user_schools(user_id):
@@ -455,7 +458,7 @@ def api_augur_deed():
         'Judge this deed and assign XP.'
     )
 
-    result = call_augur(system, user_msg)
+    result = call_augur(system, user_msg, num_predict=80)
     if not result or 'xp' not in result or 'verdict' not in result:
         return jsonify({'error': 'The Augur is silent. The ether is troubled.'}), 503
 
@@ -500,7 +503,9 @@ def _generate_recal_spells(school, level, context, db, user_id):
         'You are the Augur — a dark fantasy sage calibrating a hero\'s training regimen. '
         'Return ONLY valid JSON: {"spells":[{"name":"string","description":"string","xp":number}]}. '
         '4-5 spells. '
-        'STEP 1 — "description": a concrete, real-world habit the hero must perform. Must be specific and actionable (e.g. "Sleep 7-9 hours", "Run 5km", "Read for 30 minutes", "Cook a healthy meal"). '
+        'CRITICAL: Every spell MUST be a habit that directly belongs to the school shown. '
+        'Do not invent habits from unrelated domains — if the school is Divination, all habits must relate to mental clarity, mindfulness, journaling, reflection, etc. '
+        'STEP 1 — "description": a concrete, real-world habit the hero must perform. Must be specific and actionable. '
         'STEP 2 — "name": a fantasy incantation title that thematically wraps that specific task. '
         'Mix these two styles across the spell list: '
         '(A) Latin/mystical words (e.g. "Somnium", "Hydor", "Ignis Vitae", "Cibus Sanctus"). '
@@ -513,14 +518,15 @@ def _generate_recal_spells(school, level, context, db, user_id):
         'XP 10-50 scaled to effort. No markdown, no extra keys.'
     )
     user_msg = (
-        f'School: {school["name"]} — {school["flavour"]}\n'
+        f'SCHOOL: {school["name"].upper()} — {school["flavour"]}\n'
+        f'ALL spells must be habits for {school["name"]} practitioners ONLY.\n'
         f'Level {level}. Recent acts: {summary}.\n'
     )
     if context:
         user_msg += f'Seeker\'s guidance: "{context}"\n'
     user_msg += 'Rules: harder demands at higher levels; reduce XP for overused habits; introduce fresh challenges.'
 
-    result = call_augur(system, user_msg)
+    result = call_augur(system, user_msg, num_predict=450)
     if not result or 'spells' not in result or not result['spells']:
         return None
 
@@ -626,7 +632,7 @@ def api_augur_school():
     )
     user_msg = f'The seeker wishes to cultivate: "{description}"\nCreate a school of magic for this pursuit.'
 
-    result = call_augur(system, user_msg)
+    result = call_augur(system, user_msg, num_predict=500)
     if not result or 'name' not in result or 'spells' not in result:
         return jsonify({'error': 'The Augur could not conceive a school at this time.'}), 503
 
