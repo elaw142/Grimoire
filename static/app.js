@@ -115,7 +115,7 @@ function addSchoolCard(school) {
 }
 
 // ── XP gain ───────────────────────────────────────────────────────────────────
-function applyXPResult(result) {
+async function applyXPResult(result) {
   const school = getSchool(result.school_id);
   if (!school) return;
   school.total_xp   = result.new_xp;
@@ -127,12 +127,10 @@ function applyXPResult(result) {
   showFloatingXP(result.xp_gained, school.color);
   updateHeaderStats();
   prependLogEntry(school, result);
-  if (result.leveled_up) {
+  if (result.leveled_up || result.rank_changed) {
     showBanner(school, result.level, result.rank);
-    triggerRecalibrate(school.id);
-  }
-  if (result.rank_changed) {
-    refreshAITitle();
+    if (result.leveled_up) await triggerRecalibrate(school.id);
+    if (result.rank_changed) refreshAITitle();
   }
 }
 
