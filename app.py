@@ -516,18 +516,18 @@ def api_augur_recalibrate():
     context = data.get('context', '').strip()
 
     system = (
-        'You are the Augur \u2014 a terse dark fantasy sage calibrating a hero\'s training regimen. '
+        'You are the Augur — a dark fantasy sage calibrating a hero\'s training regimen. '
         'Return ONLY valid JSON: {"spells":[{"name":"string","description":"string","xp":number}]}. '
-        '4\u20135 spells. '
-        '"name" is an evocative fantasy incantation title (e.g. "Rite of Iron Will", "Vigil of the Hollow Dawn"). '
-        'At low levels (1\u20139) keep names short and simple (2\u20133 words). '
-        'At mid levels (10\u201319) use more archaic, poetic phrasing (3\u20134 words). '
-        'At high levels (20+) use grand, esoteric titles (4\u20135 words, archaic language). '
-        '"description" is a plain 2\u20136 word habit (e.g. "Sleep 7-9 hours", "Run 5km"). '
-        'XP 10\u201350. No markdown, no extra keys.'
+        '4-5 spells. '
+        'STEP 1 — "description": a concrete, real-world habit the hero must perform. Must be specific and actionable (e.g. "Sleep 7-9 hours", "Run 5km", "Read for 30 minutes", "Cook a healthy meal"). '
+        'STEP 2 — "name": a fantasy incantation title that thematically wraps that specific task. '
+        'At low levels (1-9): short, simple names (2-3 words). '
+        'At mid levels (10-19): more poetic (3-4 words). '
+        'At high levels (20+): grand, esoteric (4-5 words). '
+        'XP 10-50 scaled to effort. No markdown, no extra keys.'
     )
     user_msg = (
-        f'School: {school["name"]} \u2014 {school["flavour"]}\n'
+        f'School: {school["name"]} — {school["flavour"]}\n'
         f'Level {level}. Recent acts: {summary}.\n'
     )
     if context:
@@ -573,12 +573,14 @@ def api_augur_school():
         return jsonify({'error': 'No description provided'}), 400
 
     system = (
-        'You are the Augur \u2014 a dark fantasy sage who names and defines schools of arcane practice. '
+        'You are the Augur — a dark fantasy sage who names and defines schools of arcane practice. '
         'Return ONLY valid JSON: {"name":"string","flavour":"string","spells":[{"name":"string","description":"string","xp":number}]}. '
-        'School name: 1\u20132 evocative dark fantasy words fitting a magical school (e.g. Umbramancy, Ironveil, Sanguine). '
-        'Flavour: 1\u20132 atmospheric sentences. '
-        '4\u20135 spells. "name" is a short fantasy incantation title (2\u20133 words, simple since this is level 1). '
-        '"description" is a plain 2\u20136 word habit. XP 10\u201350. No markdown, no extra keys.'
+        'School name: 1-2 evocative dark fantasy words (e.g. Umbramancy, Ironveil, Sanguine). '
+        'Flavour: 1-2 atmospheric sentences describing the school. '
+        '4-5 spells. For each spell: '
+        'STEP 1 — "description": a concrete real-world habit relevant to this pursuit (e.g. "Cook a new recipe", "Practice knife skills for 20 minutes"). Must be specific and actionable. '
+        'STEP 2 — "name": a short fantasy incantation title wrapping that task (2-3 words, simple since level 1). '
+        'XP 10-50. No markdown, no extra keys.'
     )
     user_msg = f'The seeker wishes to cultivate: "{description}"\nCreate a school of magic for this pursuit.'
 

@@ -18,18 +18,6 @@
 
 ---
 
-### 4. Correct Task → Spell Generation Process
-
-- Fix current AI workflow when creating schools and tasks:
-  - Current issue: AI generates _spell names first_, not real tasks.
-- Correct process should be:
-  1. Generate **real, actionable tasks**
-  2. Then transform each into a **spell name + flavour text**
-- Example:
-  - AI was creating the task like the following: _Inspiro — Grants a burst of creative flow_ which is not an actual task
-- Ensure all tasks remain practical and checklist-friendly.
-
----
 
 ## ⚡ Performance Improvements
 
