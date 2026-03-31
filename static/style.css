@@ -220,12 +220,17 @@ a:hover { color: #e8d5a8; }
 }
 
 @media (min-width: 900px) {
+  html { font-size: 20px; }
   .school-grid { grid-template-columns: 1fr 1fr; }
   .main-content { max-width: 900px; padding: 16px 32px 24px; }
   .header-inner { max-width: 900px; }
   .site-header { padding: 24px 32px 18px; }
   .header-name { font-size: 28px; margin-bottom: 12px; }
   .hstat-value { font-size: 22px; }
+  .card-name { font-size: 16px; }
+  .drawer-title { font-size: 21px; }
+  .drawer-subtitle { font-size: 16px; }
+  .section-label-full, .section-label-short { font-size: 11px; }
 }
 
 /* ── Stat card ────────────────────────────────────────────────────────────── */
