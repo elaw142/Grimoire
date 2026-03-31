@@ -666,33 +666,36 @@ def api_augur_title():
     if not schools:
         return jsonify({'error': 'No schools found'}), 400
 
-    school_summary = ', '.join(
-        f'{s["name"]} LV{s["level"]}' for s in schools
-    )
     avg_level = round(sum(s['level'] for s in schools) / len(schools))
     dominant = max(schools, key=lambda s: s['level'])
-    is_specialised = dominant['level'] >= avg_level + 5
+    others = [s for s in schools if s['id'] != dominant['id']]
+    avg_others = round(sum(s['level'] for s in others) / len(others)) if others else dominant['level']
+    # Specialised if dominant is a full rank letter above the average of the rest
+    is_specialised = get_rank(dominant['level'])['name'] != get_rank(avg_others)['name']
 
-    ranks_summary = ', '.join(f'{s["name"]} ({s["rank"]["name"]}-rank)' for s in schools)
+    ranks_summary = ', '.join(f'{s["name"]} ({s["rank"]["name"]}-rank LV{s["level"]})' for s in schools)
+    dominant_rank = dominant['rank']['name']
+
     system = (
         'You are the Augur — a dark fantasy sage bestowing titles upon heroes. '
         'Return ONLY valid JSON: {"title":"string"}. '
-        'The title must honestly reflect the hero\'s CURRENT rank, not their potential. '
-        'F-rank = raw beginner (e.g. "Untested Initiate", "Fledgling Seeker"). '
-        'E-rank = showing promise (e.g. "Apprentice of the Veil", "Emerging Adept"). '
-        'D-rank = capable (e.g. "Journeyman of Shadows", "Rising Practitioner"). '
-        'C-rank = competent (e.g. "Adept of the Arcane", "Seasoned Channeler"). '
-        'B-rank = skilled (e.g. "Master of Two Paths", "Ordained Wielder"). '
-        'A-rank = elite (e.g. "Exalted Archmage", "Herald of the Unseen"). '
-        'S-rank = legendary (e.g. "Eternal Sovereign of Magic", "Ascendant One"). '
-        'If one school dominates, reflect that school\'s theme in the title. '
+        'The title must honestly reflect CURRENT rank — do not flatter or project future greatness. '
+        'F-rank = raw beginner: "Untested Initiate", "Fledgling Seeker", "Unproven Wanderer". '
+        'E-rank = early promise: "Apprentice of X", "Emerging Practitioner", "Initiate of X". '
+        'D-rank = capable: "Journeyman of X", "Rising Wielder of X". '
+        'C-rank = competent: "Adept of X", "Seasoned Channeler of X". '
+        'B-rank = skilled: "Master of X", "Ordained Wielder". '
+        'A-rank = elite: "Exalted X", "Herald of the Unseen". '
+        'S-rank = legendary: "Eternal Sovereign", "Ascendant One". '
+        'Replace X with the dominant school name or theme. '
         'Title must be 2-4 words. No markdown, no extra keys.'
     )
     user_msg = (
-        f'Schools and ranks: {ranks_summary}.\n'
-        f'Average level: {avg_level}. '
-        f'{"Specialised in " + dominant["name"] + "." if is_specialised else "Balanced across schools."}\n'
-        'Bestow an honest title matching current rank.'
+        f'All schools: {ranks_summary}.\n'
+        f'Dominant school: {dominant["name"]} at {dominant_rank}-rank.\n'
+        f'{"Specialised — dominant school is a full grade above the rest." if is_specialised else "Broadly similar ranks across schools."}\n'
+        f'Overall average level: {avg_level}.\n'
+        'Bestow a title that is HONEST about current rank.'
     )
 
     result = call_augur(system, user_msg)

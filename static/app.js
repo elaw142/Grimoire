@@ -784,8 +784,10 @@ document.addEventListener('click', e => {
   }
 });
 
-// Always refresh title on page load
-refreshAITitle();
+// Generate title on page load only if none exists yet
+if (document.getElementById('header-ai-title')?.querySelector('.hstat-pending')) {
+  refreshAITitle();
+}
 
 // ── Keyboard shortcuts ────────────────────────────────────────────────────────
 document.addEventListener('keydown', e => {
