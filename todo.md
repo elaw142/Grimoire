@@ -2,22 +2,7 @@
 
 ## 🔮 Core Feature Enhancements
 
-### 1. Replace XP with AI-Generated Title
-
-- Remove or hide the "Total XP" stat from the user profile.
-- Introduce an AI-generated **themed title** based on the user's skills.
-- Title generation should consider:
-  - Skill levels (including custom skills)
-  - Specialisation vs balance (e.g. one dominant skill vs well-rounded)
-- Example titles:
-  - Novice Mage
-  - Expert Artificer
-  - Archmage (all non-custom skills at S-tier)
-- Ensure titles feel magical, varied, and progression-based.
-
----
-
-### 2. New User Experience (Augur Flow)
+### 1. New User Experience (Augur Flow)
 
 - Replace current predetermined starting tasks.
 - Introduce an **Augur-guided onboarding flow**:

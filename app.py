@@ -113,7 +113,8 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL,
-            created_at TEXT NOT NULL
+            created_at TEXT NOT NULL,
+            ai_title TEXT
         );
         CREATE TABLE IF NOT EXISTS schools (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -375,15 +376,17 @@ def index():
     ).fetchall()
     deed_log = [dict(d) for d in deed_log]
 
-    total_xp = sum(s['total_xp'] for s in schools)
     avg_level = round(sum(s['level'] for s in schools) / len(schools)) if schools else 1
     overall_rank = get_rank(avg_level)
+
+    user_row = db.execute('SELECT ai_title FROM users WHERE id=?', (user_id,)).fetchone()
+    ai_title = user_row['ai_title'] if user_row and user_row['ai_title'] else None
 
     return render_template(
         'index.html',
         username=session['username'],
         schools=schools,
-        total_xp=total_xp,
+        ai_title=ai_title,
         avg_level=avg_level,
         overall_rank=overall_rank,
         ranks=RANKS,
@@ -652,6 +655,49 @@ def api_augur_school_confirm():
     })
 
 
+@app.route('/api/augur/title', methods=['POST'])
+@require_login_api
+def api_augur_title():
+    user_id = session['user_id']
+    db = get_db()
+    schools = get_user_schools(user_id)
+    if not schools:
+        return jsonify({'error': 'No schools found'}), 400
+
+    school_summary = ', '.join(
+        f'{s["name"]} LV{s["level"]}' for s in schools
+    )
+    avg_level = round(sum(s['level'] for s in schools) / len(schools))
+    dominant = max(schools, key=lambda s: s['level'])
+    is_specialised = dominant['level'] >= avg_level + 5
+
+    system = (
+        'You are the Augur — a dark fantasy sage bestowing titles upon heroes. '
+        'Return ONLY valid JSON: {"title":"string"}. '
+        'The title should be 2-4 words, evocative and magical. '
+        'If one school dominates (specialised), reflect that school\'s theme. '
+        'If schools are balanced, reflect mastery and breadth. '
+        'Scale grandeur with average level: low (1-9) = humble titles, '
+        'mid (10-19) = distinguished titles, high (20+) = legendary titles. '
+        'No markdown, no extra keys.'
+    )
+    user_msg = (
+        f'Schools: {school_summary}.\n'
+        f'Average level: {avg_level}. '
+        f'{"Specialised in " + dominant["name"] + "." if is_specialised else "Well-rounded."}\n'
+        'Bestow a title.'
+    )
+
+    result = call_augur(system, user_msg)
+    if not result or 'title' not in result:
+        return jsonify({'error': 'The Augur could not bestow a title.'}), 503
+
+    title = str(result['title'])[:60]
+    db.execute('UPDATE users SET ai_title=? WHERE id=?', (title, user_id))
+    db.commit()
+    return jsonify({'title': title})
+
+
 @app.route('/api/school/<int:school_id>', methods=['DELETE'])
 @require_login_api
 def api_delete_school(school_id):
@@ -672,6 +718,15 @@ def api_delete_school(school_id):
 # ── Init & run ────────────────────────────────────────────────────────────────
 
 init_db()
+
+# Migrate existing DBs that predate the ai_title column
+try:
+    _mig = sqlite3.connect(DATABASE)
+    _mig.execute('ALTER TABLE users ADD COLUMN ai_title TEXT')
+    _mig.commit()
+    _mig.close()
+except Exception:
+    pass
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5009, debug=False)

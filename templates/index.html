@@ -31,8 +31,10 @@
         <div class="hstat-value">{{ avg_level }}</div>
       </div>
       <div class="header-stat">
-        <div class="hstat-label">TOTAL XP</div>
-        <div class="hstat-value" style="color:#7a9a6a;">{{ "{:,}".format(total_xp) }}</div>
+        <div class="hstat-label">TITLE</div>
+        <div class="hstat-value header-title-value" id="header-ai-title">
+          {% if ai_title %}{{ ai_title }}{% else %}<span class="hstat-pending">—</span>{% endif %}
+        </div>
       </div>
     </div>
   </div>

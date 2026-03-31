@@ -130,20 +130,25 @@ function applyXPResult(result) {
   if (result.leveled_up) {
     showBanner(school, result.level, result.rank);
     triggerRecalibrate(school.id);
+    refreshAITitle();
   }
 }
 
 function updateHeaderStats() {
   if (!schools.length) return;
-  const total = schools.reduce((a, s) => a + (s.total_xp || 0), 0);
   const avgLv = Math.round(schools.reduce((a, s) => a + s.level, 0) / schools.length);
   const rank  = getRank(avgLv);
   const rankEl = document.querySelector('.header-stats .header-stat:nth-child(1) .hstat-value');
   const lvEl   = document.querySelector('.header-stats .header-stat:nth-child(2) .hstat-value');
-  const xpEl   = document.querySelector('.header-stats .header-stat:nth-child(3) .hstat-value');
   if (rankEl) { rankEl.textContent = rank.name; rankEl.style.color = rank.color; rankEl.style.textShadow = `0 0 14px ${rank.color}70`; }
   if (lvEl)   lvEl.textContent = avgLv;
-  if (xpEl)   xpEl.textContent = total.toLocaleString();
+}
+
+async function refreshAITitle() {
+  const el = document.getElementById('header-ai-title');
+  if (!el) return;
+  const result = await apiFetch('/api/augur/title', {});
+  if (result.title) el.textContent = result.title;
 }
 
 function prependLogEntry(school, result) {
