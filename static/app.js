@@ -149,6 +149,7 @@ function updateHeaderStats() {
 async function refreshAITitle() {
   const el = document.getElementById('header-ai-title');
   if (!el) return;
+  el.innerHTML = '<span class="title-generating">&#10022;</span>';
   const result = await apiFetch('/api/augur/title', {});
   if (result.title) el.textContent = result.title;
 }
@@ -783,10 +784,8 @@ document.addEventListener('click', e => {
   }
 });
 
-// Auto-generate title on first load if none exists
-if (document.getElementById('header-ai-title')?.querySelector('.hstat-pending')) {
-  refreshAITitle();
-}
+// Always refresh title on page load
+refreshAITitle();
 
 // ── Keyboard shortcuts ────────────────────────────────────────────────────────
 document.addEventListener('keydown', e => {
