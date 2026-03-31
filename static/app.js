@@ -734,6 +734,18 @@ async function confirmNewSchool() {
   }
 }
 
+// ── Rank info tooltip ─────────────────────────────────────────────────────────
+function toggleRankInfo(btn) {
+  const tooltip = btn.nextElementSibling;
+  tooltip.classList.toggle('visible');
+}
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('.rank-info-wrap')) {
+    document.querySelectorAll('.rank-tooltip.visible').forEach(t => t.classList.remove('visible'));
+  }
+});
+
 // ── Keyboard shortcuts ────────────────────────────────────────────────────────
 document.addEventListener('keydown', e => {
   if (e.key !== 'Escape') return;

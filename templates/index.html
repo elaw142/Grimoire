@@ -12,8 +12,18 @@
     <div class="header-stats">
       <div class="header-stat">
         <div class="hstat-label">RANK</div>
-        <div class="hstat-value" style="color:{{ overall_rank.color }};text-shadow:0 0 14px {{ overall_rank.color }}70;">
-          {{ overall_rank.name }}
+        <div class="rank-info-wrap">
+          <div class="hstat-value" style="color:{{ overall_rank.color }};text-shadow:0 0 14px {{ overall_rank.color }}70;">
+            {{ overall_rank.name }}
+          </div>
+          <button class="rank-info-btn" onclick="toggleRankInfo(this)" aria-label="Rank thresholds">?</button>
+          <div class="rank-tooltip">
+            {% for rank in ranks %}
+            <div class="rank-tooltip-row" style="color:{{ rank.color }};">
+              <span>{{ rank.name }}</span><span>LV{{ rank.min_level }}+</span>
+            </div>
+            {% endfor %}
+          </div>
         </div>
       </div>
       <div class="header-stat">
@@ -63,23 +73,6 @@
     {% endfor %}
   </div>
 
-  <!-- Rank guide -->
-  <div class="divider"></div>
-  <div class="section-label">RANK THRESHOLDS</div>
-  <div class="rank-guide">
-    {% for rank in ranks %}
-    <div class="rank-pip" style="border-color:{{ rank.color }}40;background:{{ rank.color }}0a;">
-      <span style="font-family:'Cinzel',serif;font-weight:700;font-size:11px;color:{{ rank.color }};">{{ rank.name }}</span>
-      <span class="rank-pip-level">LV{{ rank.min_level }}+</span>
-    </div>
-    {% endfor %}
-  </div>
-
-  <div style="margin-top:28px;text-align:center;">
-    <form method="post" action="/logout" style="display:inline;">
-      <button class="reset-btn" type="submit" onclick="return confirm('Sign out?')">SIGN OUT</button>
-    </form>
-  </div>
 </main>
 
 <!-- Spell drawer overlay -->
@@ -102,6 +95,11 @@
       <button class="menu-tab" data-tab="augur" onclick="setMenuTab('augur')">AUGUR</button>
     </div>
     <div id="menu-content" class="menu-content"></div>
+    <div class="menu-footer">
+      <form method="post" action="/logout" style="display:inline;">
+        <button class="reset-btn" type="submit" onclick="return confirm('Sign out?')">SIGN OUT</button>
+      </form>
+    </div>
   </div>
 </div>
 
