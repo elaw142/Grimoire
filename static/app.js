@@ -127,10 +127,10 @@ async function applyXPResult(result) {
   showFloatingXP(result.xp_gained, school.color);
   updateHeaderStats();
   prependLogEntry(school, result);
-  if (result.leveled_up || result.rank_changed) {
+  if (result.leveled_up) {
     showBanner(school, result.level, result.rank);
-    if (result.leveled_up) await triggerRecalibrate(school.id);
-    if (result.rank_changed) refreshAITitle();
+    await triggerRecalibrate(school.id);
+    refreshAITitle();
   }
 }
 
@@ -220,6 +220,7 @@ async function deleteSchool(schoolId) {
   schools = schools.filter(s => s.id !== schoolId);
   const card = document.getElementById(`card-${schoolId}`);
   if (card) card.remove();
+  refreshAITitle();
   renderMenu();
 }
 

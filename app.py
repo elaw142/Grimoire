@@ -521,8 +521,11 @@ def api_augur_recalibrate():
         '4-5 spells. '
         'STEP 1 — "description": a concrete, real-world habit the hero must perform. Must be specific and actionable (e.g. "Sleep 7-9 hours", "Run 5km", "Read for 30 minutes", "Cook a healthy meal"). '
         'STEP 2 — "name": a fantasy incantation title that thematically wraps that specific task. '
-        'At low levels (1-9): short, simple names (2-3 words). '
-        'At mid levels (10-19): more poetic (3-4 words). '
+        'Mix these two styles across the spell list: '
+        '(A) Latin/mystical single words or short phrases (e.g. "Somnium", "Hydor", "Ignis Vitae", "Cibus Sanctus"). '
+        '(B) Generic fantasy patterns (e.g. "Hex of Fortitude", "Rite of Iron", "The Waking Vigil", "Oath of Clarity"). '
+        'At low levels (1-9): short names (2-3 words). '
+        'At mid levels (10-19): more elaborate (3-4 words). '
         'At high levels (20+): grand, esoteric (4-5 words). '
         'XP 10-50 scaled to effort. No markdown, no extra keys.'
     )
@@ -580,6 +583,7 @@ def api_augur_school():
         '4-5 spells. For each spell: '
         'STEP 1 — "description": a concrete real-world habit relevant to this pursuit (e.g. "Cook a new recipe", "Practice knife skills for 20 minutes"). Must be specific and actionable. '
         'STEP 2 — "name": a short fantasy incantation title wrapping that task (2-3 words, simple since level 1). '
+        'Mix two styles: (A) Latin/mystical words (e.g. "Somnium", "Ignis", "Cibus Rite") and (B) generic fantasy patterns (e.g. "Hex of X", "Oath of X", "X Vigil"). '
         'XP 10-50. No markdown, no extra keys.'
     )
     user_msg = f'The seeker wishes to cultivate: "{description}"\nCreate a school of magic for this pursuit.'
