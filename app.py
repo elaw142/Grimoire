@@ -522,11 +522,13 @@ def api_augur_recalibrate():
         'STEP 1 — "description": a concrete, real-world habit the hero must perform. Must be specific and actionable (e.g. "Sleep 7-9 hours", "Run 5km", "Read for 30 minutes", "Cook a healthy meal"). '
         'STEP 2 — "name": a fantasy incantation title that thematically wraps that specific task. '
         'Mix these two styles across the spell list: '
-        '(A) Latin/mystical single words or short phrases (e.g. "Somnium", "Hydor", "Ignis Vitae", "Cibus Sanctus"). '
-        '(B) Generic fantasy patterns (e.g. "Hex of Fortitude", "Rite of Iron", "The Waking Vigil", "Oath of Clarity"). '
-        'At low levels (1-9): short names (2-3 words). '
-        'At mid levels (10-19): more elaborate (3-4 words). '
-        'At high levels (20+): grand, esoteric (4-5 words). '
+        '(A) Latin/mystical words (e.g. "Somnium", "Hydor", "Ignis Vitae", "Cibus Sanctus"). '
+        '(B) Fantasy patterns (e.g. "Hex of Fortitude", "Rite of Iron", "Oath of Clarity"). '
+        'IMPORTANT — scale name intensity strictly by level: '
+        'Levels 1-9: plain and simple — "Rest Rite", "Somnium", "Hydor", "Iron Oath". '
+        'Levels 10-19: more dramatic — "Rite of the Iron Body", "Vigil of Clarity", "Ignis Vitae". '
+        'Levels 20-29: intense and dark — "Oath of the Undying Flame", "Cibus Sanctus Eternum". '
+        'Levels 30+: legendary and esoteric — "The Eternal Vigil of Ash and Marrow", "Somnium Profundum Rex". '
         'XP 10-50 scaled to effort. No markdown, no extra keys.'
     )
     user_msg = (
