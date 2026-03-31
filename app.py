@@ -281,6 +281,7 @@ def build_xp_result(db, user_id, school_id, xp_gained, deed_name, is_custom=Fals
     )
     db.commit()
 
+    old_rank = get_rank(old_level)
     rank = get_rank(new_level)
     return {
         'school_id': school_id,
@@ -290,6 +291,7 @@ def build_xp_result(db, user_id, school_id, xp_gained, deed_name, is_custom=Fals
         'xp_in_level': get_xp_in_level(new_xp),
         'rank': rank,
         'leveled_up': new_level > old_level,
+        'rank_changed': rank['name'] != old_rank['name'],
         'old_level': old_level,
     }
 
@@ -671,21 +673,26 @@ def api_augur_title():
     dominant = max(schools, key=lambda s: s['level'])
     is_specialised = dominant['level'] >= avg_level + 5
 
+    ranks_summary = ', '.join(f'{s["name"]} ({s["rank"]["name"]}-rank)' for s in schools)
     system = (
         'You are the Augur — a dark fantasy sage bestowing titles upon heroes. '
         'Return ONLY valid JSON: {"title":"string"}. '
-        'The title should be 2-4 words, evocative and magical. '
-        'If one school dominates (specialised), reflect that school\'s theme. '
-        'If schools are balanced, reflect mastery and breadth. '
-        'Scale grandeur with average level: low (1-9) = humble titles, '
-        'mid (10-19) = distinguished titles, high (20+) = legendary titles. '
-        'No markdown, no extra keys.'
+        'The title must honestly reflect the hero\'s CURRENT rank, not their potential. '
+        'F-rank = raw beginner (e.g. "Untested Initiate", "Fledgling Seeker"). '
+        'E-rank = showing promise (e.g. "Apprentice of the Veil", "Emerging Adept"). '
+        'D-rank = capable (e.g. "Journeyman of Shadows", "Rising Practitioner"). '
+        'C-rank = competent (e.g. "Adept of the Arcane", "Seasoned Channeler"). '
+        'B-rank = skilled (e.g. "Master of Two Paths", "Ordained Wielder"). '
+        'A-rank = elite (e.g. "Exalted Archmage", "Herald of the Unseen"). '
+        'S-rank = legendary (e.g. "Eternal Sovereign of Magic", "Ascendant One"). '
+        'If one school dominates, reflect that school\'s theme in the title. '
+        'Title must be 2-4 words. No markdown, no extra keys.'
     )
     user_msg = (
-        f'Schools: {school_summary}.\n'
+        f'Schools and ranks: {ranks_summary}.\n'
         f'Average level: {avg_level}. '
-        f'{"Specialised in " + dominant["name"] + "." if is_specialised else "Well-rounded."}\n'
-        'Bestow a title.'
+        f'{"Specialised in " + dominant["name"] + "." if is_specialised else "Balanced across schools."}\n'
+        'Bestow an honest title matching current rank.'
     )
 
     result = call_augur(system, user_msg)

@@ -130,6 +130,8 @@ function applyXPResult(result) {
   if (result.leveled_up) {
     showBanner(school, result.level, result.rank);
     triggerRecalibrate(school.id);
+  }
+  if (result.rank_changed) {
     refreshAITitle();
   }
 }
@@ -780,6 +782,11 @@ document.addEventListener('click', e => {
     document.querySelectorAll('.rank-tooltip.visible').forEach(t => t.classList.remove('visible'));
   }
 });
+
+// Auto-generate title on first load if none exists
+if (document.getElementById('header-ai-title')?.querySelector('.hstat-pending')) {
+  refreshAITitle();
+}
 
 // ── Keyboard shortcuts ────────────────────────────────────────────────────────
 document.addEventListener('keydown', e => {
