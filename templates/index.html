@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block content %}
+
+<!-- Header -->
+<header class="site-header">
+  <button class="menu-trigger" onclick="openMenu()" aria-label="Open menu">
+    <span></span><span></span><span></span>
+  </button>
+  <div class="header-inner">
+    <div class="header-eyebrow">CHARACTER SHEET</div>
+    <div class="header-name">{{ username }}</div>
+    <div class="header-stats">
+      <div class="header-stat">
+        <div class="hstat-label">RANK</div>
+        <div class="hstat-value" style="color:{{ overall_rank.color }};text-shadow:0 0 14px {{ overall_rank.color }}70;">
+          {{ overall_rank.name }}
+        </div>
+      </div>
+      <div class="header-stat">
+        <div class="hstat-label">AVG LV</div>
+        <div class="hstat-value">{{ avg_level }}</div>
+      </div>
+      <div class="header-stat">
+        <div class="hstat-label">TOTAL XP</div>
+        <div class="hstat-value" style="color:#7a9a6a;">{{ "{:,}".format(total_xp) }}</div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- School grid -->
+<main class="main-content">
+  <div class="section-label">SCHOOLS OF MAGIC &mdash; TAP TO CAST AN INCANTATION</div>
+  <div class="school-grid" id="school-grid">
+    {% for school in schools %}
+    <div class="stat-card" id="card-{{ school.id }}"
+         data-school-id="{{ school.id }}"
+         data-color="{{ school.color }}"
+         onclick="openDrawer({{ school.id }})">
+      <div class="card-inner">
+        <div class="rank-badge"
+             style="color:{{ school.rank.color }};border-color:{{ school.rank.color }}90;background:{{ school.rank.color }}18;{% if school.level >= 25 %}box-shadow:0 0 8px {{ school.rank.color }}45;{% endif %}">
+          {{ school.rank.name }}
+        </div>
+        <div class="card-body">
+          <div class="card-name">{{ school.name }}</div>
+          {% if school.is_custom %}<div class="card-custom-tag">CUSTOM</div>{% endif %}
+          <div class="card-level-row">
+            <span>LV {{ school.level }}</span>
+            <span>{{ school.xp_in_level }}/100</span>
+          </div>
+          <div class="xp-bar-bg">
+            <div class="xp-bar-fill"
+                 style="width:{{ (school.xp_in_level / 100 * 100)|int }}%;background:linear-gradient(90deg,{{ school.color }}70,{{ school.color }});box-shadow:0 0 5px {{ school.color }}50;">
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="card-recal-spinner" id="recal-{{ school.id }}" style="display:none;">
+        <div class="ai-spinner"></div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- Rank guide -->
+  <div class="divider"></div>
+  <div class="section-label">RANK THRESHOLDS</div>
+  <div class="rank-guide">
+    {% for rank in ranks %}
+    <div class="rank-pip" style="border-color:{{ rank.color }}40;background:{{ rank.color }}0a;">
+      <span style="font-family:'Cinzel',serif;font-weight:700;font-size:11px;color:{{ rank.color }};">{{ rank.name }}</span>
+      <span class="rank-pip-level">LV{{ rank.min_level }}+</span>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div style="margin-top:28px;text-align:center;">
+    <form method="post" action="/logout" style="display:inline;">
+      <button class="reset-btn" type="submit" onclick="return confirm('Sign out?')">SIGN OUT</button>
+    </form>
+  </div>
+</main>
+
+<!-- Spell drawer overlay -->
+<div id="drawer-overlay" class="panel-overlay hidden" onclick="closeDrawer()">
+  <div class="panel-drawer" id="drawer" onclick="event.stopPropagation()">
+    <div id="drawer-content"></div>
+  </div>
+</div>
+
+<!-- Side menu -->
+<div id="menu-overlay" class="menu-overlay hidden" onclick="closeMenu()">
+  <div class="menu-panel" onclick="event.stopPropagation()">
+    <div class="menu-header">
+      <div class="menu-header-title">GRIMOIRE</div>
+      <button class="drawer-close" onclick="closeMenu()" aria-label="Close">&times;</button>
+    </div>
+    <div class="menu-tabs">
+      <button class="menu-tab active" data-tab="chronicle" onclick="setMenuTab('chronicle')">CHRONICLE</button>
+      <button class="menu-tab" data-tab="orrery" onclick="setMenuTab('orrery')">ORRERY</button>
+      <button class="menu-tab" data-tab="augur" onclick="setMenuTab('augur')">AUGUR</button>
+    </div>
+    <div id="menu-content" class="menu-content"></div>
+  </div>
+</div>
+
+<!-- Floating XP -->
+<div id="floating-xp" class="floating-xp hidden"></div>
+
+<!-- Level-up banner -->
+<div id="levelup-banner" class="levelup-banner hidden">
+  <div class="levelup-inner">
+    <div class="levelup-eyebrow">LEVEL ATTAINED</div>
+    <div class="levelup-text" id="levelup-text"></div>
+    <div class="levelup-sub" id="levelup-sub"></div>
+  </div>
+</div>
+
+<script>
+  window.GRIMOIRE_DATA = {{ schools_json | safe }};
+  window.DEED_LOG     = {{ deed_log_json | safe }};
+  window.XP_PER_LEVEL = 100;
+  window.RANKS        = {{ ranks | tojson }};
+</script>
+<script src="/static/app.js"></script>
+{% endblock %}

@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="auth-wrap">
+  <div class="auth-card">
+    <div class="auth-eyebrow">INSCRIBE YOUR NAME</div>
+    <h1 class="auth-title">Grimoire</h1>
+    <div class="auth-divider"></div>
+
+    {% if error %}
+    <div class="auth-error">{{ error }}</div>
+    {% endif %}
+
+    <form method="post" action="/signup" autocomplete="on">
+      <div class="field-group">
+        <label class="field-label" for="username">USERNAME</label>
+        <input class="field-input" type="text" id="username" name="username"
+               autocomplete="username" minlength="3" maxlength="30" required>
+      </div>
+      <div class="field-group">
+        <label class="field-label" for="password">PASSWORD</label>
+        <input class="field-input" type="password" id="password" name="password"
+               autocomplete="new-password" minlength="6" required>
+      </div>
+      <button class="auth-submit" type="submit">BEGIN YOUR LEGEND</button>
+    </form>
+
+    <div class="auth-footer">
+      Already inscribed? <a href="/login">Return to the gate</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

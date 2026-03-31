@@ -1,0 +1,10 @@
+{
+  "name": "Grimoire",
+  "short_name": "Grimoire",
+  "description": "A dark fantasy life RPG and habit tracker",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0806",
+  "theme_color": "#c9a227",
+  "orientation": "portrait"
+}

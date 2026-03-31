@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="auth-wrap">
+  <div class="auth-card">
+    <div class="auth-eyebrow">ENTER THE</div>
+    <h1 class="auth-title">Grimoire</h1>
+    <div class="auth-divider"></div>
+
+    {% if error %}
+    <div class="auth-error">{{ error }}</div>
+    {% endif %}
+
+    <form method="post" action="/login" autocomplete="on">
+      <div class="field-group">
+        <label class="field-label" for="username">USERNAME</label>
+        <input class="field-input" type="text" id="username" name="username"
+               autocomplete="username" required>
+      </div>
+      <div class="field-group">
+        <label class="field-label" for="password">PASSWORD</label>
+        <input class="field-input" type="password" id="password" name="password"
+               autocomplete="current-password" required>
+      </div>
+      <button class="auth-submit" type="submit">OPEN THE GRIMOIRE</button>
+    </form>
+
+    <div class="auth-footer">
+      No account? <a href="/signup">Inscribe your name</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,10 @@
+grimoire.db
+grimoire.service
+__pycache__/
+*.pyc
+*.pyo
+.env
+venv/
+.venv/
+*.egg-info/
+dist/
