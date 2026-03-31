@@ -39,12 +39,10 @@ function getRank(level) {
 function getLevel(xp)      { return Math.floor(xp / XP_PER_LEVEL) + 1; }
 function getXPInLevel(xp)  { return xp % XP_PER_LEVEL; }
 
-async function apiFetch(url, body) {
-  const resp = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
+async function apiFetch(url, body, method = 'POST') {
+  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  if (method !== 'DELETE') opts.body = JSON.stringify(body);
+  const resp = await fetch(url, opts);
   return resp.json();
 }
 
@@ -207,6 +205,18 @@ function closeDrawer() {
   pendingVerdict = null;
 }
 
+async function deleteSchool(schoolId) {
+  const school = getSchool(schoolId);
+  if (!school) return;
+  if (!confirm(`Banish the school of ${school.name}? This cannot be undone.`)) return;
+  const result = await apiFetch(`/api/school/${schoolId}`, {}, 'DELETE');
+  if (result.error) { alert(result.error); return; }
+  closeDrawer();
+  GRIMOIRE_DATA = GRIMOIRE_DATA.filter(s => s.id !== schoolId);
+  const card = document.getElementById(`card-${schoolId}`);
+  if (card) card.remove();
+}
+
 function renderDrawer() {
   const school = getSchool(activeSchoolId);
   if (!school) return;
@@ -263,7 +273,10 @@ function renderDrawer() {
         <div class="drawer-title">${escHtml(school.name)}</div>
         <div class="drawer-subtitle">Level ${school.level} &middot; ${school.xp_in_level}/100 XP</div>
       </div>
-      <button class="drawer-close" onclick="closeDrawer()" aria-label="Close">&times;</button>
+      <div class="drawer-header-actions">
+        ${school.is_custom ? `<button class="school-delete-btn" onclick="deleteSchool(${school.id})" aria-label="Delete school" title="Delete school">&#128465;</button>` : ''}
+        <button class="drawer-close" onclick="closeDrawer()" aria-label="Close">&times;</button>
+      </div>
     </div>
     <div class="xp-bar-bg" style="margin-bottom:18px;">
       <div class="xp-bar-fill"

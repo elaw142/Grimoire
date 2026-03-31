@@ -538,6 +538,21 @@ a:hover { color: #e8d5a8; }
 
 .drawer-close:hover { color: #8a7050; }
 
+.drawer-header-actions { display: flex; align-items: center; gap: 4px; margin-left: auto; }
+
+.school-delete-btn {
+  background: none;
+  border: none;
+  color: #7a5050;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 2px 6px;
+  line-height: 1;
+  transition: color 0.15s;
+  opacity: 0.6;
+}
+.school-delete-btn:hover { color: #c45a5a; opacity: 1; }
+
 /* ── Habit buttons ────────────────────────────────────────────────────────── */
 .habit-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 18px; transition: opacity 0.3s; }
 .habit-list.loading { opacity: 0.45; }

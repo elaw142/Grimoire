@@ -652,6 +652,23 @@ def api_augur_school_confirm():
     })
 
 
+@app.route('/api/school/<int:school_id>', methods=['DELETE'])
+@require_login_api
+def api_delete_school(school_id):
+    user_id = session['user_id']
+    db = get_db()
+    school = db.execute(
+        'SELECT * FROM schools WHERE id=? AND user_id=? AND is_custom=1',
+        (school_id, user_id),
+    ).fetchone()
+    if not school:
+        return jsonify({'error': 'Not found or not a custom school'}), 404
+
+    db.execute('DELETE FROM schools WHERE id=?', (school_id,))
+    db.commit()
+    return jsonify({'ok': True})
+
+
 # ── Init & run ────────────────────────────────────────────────────────────────
 
 init_db()
