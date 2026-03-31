@@ -274,7 +274,6 @@ function renderDrawer() {
         <div class="drawer-subtitle">Level ${school.level} &middot; ${school.xp_in_level}/100 XP</div>
       </div>
       <div class="drawer-header-actions">
-        ${school.is_custom ? `<button class="school-delete-btn" onclick="deleteSchool(${school.id})" aria-label="Delete school" title="Delete school">&#128465;</button>` : ''}
         <button class="drawer-close" onclick="closeDrawer()" aria-label="Close">&times;</button>
       </div>
     </div>
@@ -286,7 +285,8 @@ function renderDrawer() {
     <div class="oracle-section-label" style="margin-bottom:8px;">PERFORM AN INCANTATION</div>
     <div class="habit-list" id="habit-list">${spellsHtml}</div>
     <div class="divider" style="margin:0 0 14px;"></div>
-    ${oracleSection}`;
+    ${oracleSection}
+    ${school.is_custom ? `<div class="divider" style="margin:14px 0 10px;"></div><button class="banish-school-btn" onclick="deleteSchool(${school.id})">BANISH THIS SCHOOL</button>` : ''}`;
 
   if (!pendingVerdict) {
     const inp = document.getElementById('deed-input');
