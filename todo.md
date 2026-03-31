@@ -17,17 +17,7 @@
 
 ---
 
-### 2. School Flavour Text on Click
-
-- When a user clicks on a school to log a task:
-  - Display **flavour text** describing the school.
-- This should:
-  - Add immersion
-  - Help define the theme/purpose of the school
-
----
-
-### 3. New User Experience (Augur Flow)
+### 2. New User Experience (Augur Flow)
 
 - Replace current predetermined starting tasks.
 - Introduce an **Augur-guided onboarding flow**:

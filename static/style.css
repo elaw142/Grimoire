@@ -530,6 +530,14 @@ a:hover { color: #e8d5a8; }
 
 .drawer-subtitle { font-size: 15px; color: #9a8a6a; }
 
+.drawer-flavour {
+  font-style: italic;
+  font-size: 14px;
+  color: #7a6a50;
+  margin-top: 6px;
+  line-height: 1.5;
+}
+
 .drawer-close {
   background: none;
   border: none;

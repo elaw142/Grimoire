@@ -287,6 +287,7 @@ function renderDrawer() {
       <div class="drawer-title-wrap">
         <div class="drawer-title">${escHtml(school.name)}</div>
         <div class="drawer-subtitle">Level ${school.level} &middot; ${school.xp_in_level}/100 XP</div>
+        ${school.flavour ? `<div class="drawer-flavour">${escHtml(school.flavour)}</div>` : ''}
       </div>
       <div class="drawer-header-actions">
         <button class="drawer-close" onclick="closeDrawer()" aria-label="Close">&times;</button>
