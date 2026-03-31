@@ -12,7 +12,7 @@ jobs:
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ vars.SERVER_HOST }}
-          username: ubuntu
+          username: opc
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             cd ~/grimoire
