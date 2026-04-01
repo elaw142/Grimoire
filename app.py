@@ -1,5 +1,6 @@
 import sqlite3
 import json
+import logging
 import os
 import re
 from datetime import datetime
@@ -7,6 +8,9 @@ from functools import wraps
 from flask import Flask, render_template, request, session, redirect, url_for, jsonify, g
 import bcrypt
 import requests
+
+logging.basicConfig(level=logging.INFO)
+log = logging.getLogger('grimoire')
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'grimoire-dev-secret-change-in-prod')
@@ -195,7 +199,7 @@ def require_login_api(f):
     return decorated
 
 
-def call_augur(system_prompt, user_prompt, num_predict=400, retries=1):
+def call_augur(system_prompt, user_prompt, num_predict=400, retries=1, temperature=0.5):
     full_prompt = f"{system_prompt}\n\n{user_prompt}"
     for attempt in range(retries + 1):
         try:
@@ -204,15 +208,20 @@ def call_augur(system_prompt, user_prompt, num_predict=400, retries=1):
                 'prompt': full_prompt,
                 'stream': False,
                 'format': 'json',
-                'options': {'temperature': 0.7, 'num_predict': num_predict},
+                'options': {'temperature': temperature, 'num_predict': num_predict},
             }, timeout=90)
             resp.raise_for_status()
             raw = resp.json().get('response', '')
             raw = re.sub(r'```(?:json)?', '', raw).strip('` \n')
             return json.loads(raw)
-        except Exception:
-            if attempt == retries:
-                return None
+        except requests.exceptions.Timeout:
+            log.warning('call_augur timeout (attempt %d/%d)', attempt + 1, retries + 1)
+        except requests.exceptions.RequestException as e:
+            log.warning('call_augur request error (attempt %d/%d): %s', attempt + 1, retries + 1, e)
+        except json.JSONDecodeError as e:
+            log.warning('call_augur JSON parse error (attempt %d/%d): %s | raw: %.200s', attempt + 1, retries + 1, e, raw)
+        except Exception as e:
+            log.warning('call_augur unexpected error (attempt %d/%d): %s', attempt + 1, retries + 1, e)
     return None
 
 
@@ -531,7 +540,7 @@ def _generate_recal_spells(school, level, context, db, user_id):
         user_msg += f'Seeker\'s guidance: "{context}"\n'
     user_msg += 'Rules: harder demands at higher levels; reduce XP for overused habits; introduce fresh challenges.'
 
-    result = call_augur(system, user_msg, num_predict=450)
+    result = call_augur(system, user_msg, num_predict=550, temperature=0.4)
     if not result or 'spells' not in result or not result['spells']:
         return None
 
