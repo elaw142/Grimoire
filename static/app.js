@@ -30,6 +30,37 @@ let bannerTimer = null;
 // Pending recalibration (level-up flow)
 let pendingRecal = null; // { schoolId, schoolName, spells }
 
+// ── Themed notifications ──────────────────────────────────────────────────────
+let _errorTimer = null;
+function showError(msg) {
+  const toast = document.getElementById('error-toast');
+  const msgEl = document.getElementById('error-toast-msg');
+  if (!toast || !msgEl) return;
+  msgEl.textContent = msg;
+  toast.classList.remove('hidden');
+  if (_errorTimer) clearTimeout(_errorTimer);
+  _errorTimer = setTimeout(() => toast.classList.add('hidden'), 4500);
+}
+
+function showConfirm(msg, onConfirm) {
+  const dialog    = document.getElementById('confirm-dialog');
+  const msgEl     = document.getElementById('confirm-dialog-msg');
+  const cancelBtn = document.getElementById('confirm-dialog-cancel');
+  const okBtn     = document.getElementById('confirm-dialog-ok');
+  if (!dialog) { if (confirm(msg)) onConfirm(); return; }
+  msgEl.textContent = msg;
+  dialog.classList.remove('hidden');
+  const close = () => dialog.classList.add('hidden');
+  cancelBtn.onclick = close;
+  okBtn.onclick = () => { close(); onConfirm(); };
+}
+
+function confirmSignOut() {
+  showConfirm('Sign out of Grimoire?', () => {
+    document.getElementById('logout-form').submit();
+  });
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function getSchool(id) { return schools.find(s => s.id === id); }
 
@@ -216,15 +247,16 @@ function closeDrawer() {
 async function deleteSchool(schoolId) {
   const school = getSchool(schoolId);
   if (!school) return;
-  if (!confirm(`Banish the school of ${school.name}? This cannot be undone.`)) return;
-  const result = await apiFetch(`/api/school/${schoolId}`, {}, 'DELETE');
-  if (result.error) { alert(result.error); return; }
-  closeDrawer();
-  schools = schools.filter(s => s.id !== schoolId);
-  const card = document.getElementById(`card-${schoolId}`);
-  if (card) card.remove();
-  refreshAITitle();
-  renderMenu();
+  showConfirm(`Banish the school of ${school.name}? This cannot be undone.`, async () => {
+    const result = await apiFetch(`/api/school/${schoolId}`, {}, 'DELETE');
+    if (result.error) { showError(result.error); return; }
+    closeDrawer();
+    schools = schools.filter(s => s.id !== schoolId);
+    const card = document.getElementById(`card-${schoolId}`);
+    if (card) card.remove();
+    refreshAITitle();
+    renderMenu();
+  });
 }
 
 function updateRecalBanish() {
@@ -324,7 +356,7 @@ async function castSpell(spellId, schoolId) {
   deedLoading = true;
   const result = await apiFetch('/api/cast', { spell_id: spellId });
   deedLoading = false;
-  if (result.error) { alert(result.error); return; }
+  if (result.error) { showError(result.error); return; }
   const school = getSchool(schoolId);
   const spell  = (school?.spells || []).find(sp => sp.id === spellId);
   result._deed_name = spell?.name || '';
@@ -356,7 +388,7 @@ async function acceptVerdict() {
   if (!pendingVerdict || pendingVerdict.error) { retryDeed(); return; }
   const { deed, xp, verdict } = pendingVerdict;
   const result = await apiFetch('/api/augur/accept', { school_id: activeSchoolId, deed, xp, verdict });
-  if (result.error) { alert(result.error); return; }
+  if (result.error) { showError(result.error); return; }
   result._deed_name = deed;
   result._is_custom = true;
   result._verdict   = verdict;
@@ -745,7 +777,7 @@ async function doAugurRecalibrate() {
     augurState.recalResult = null;
     renderAugurTab();
     // Show error inline — re-render will show form; alert for now
-    alert((result && result.error) || 'The Augur could not recalibrate at this time.');
+    showError((result && result.error) || 'The Augur could not recalibrate at this time.');
     return;
   }
 
@@ -757,7 +789,7 @@ async function doAugurRecalibrate() {
 async function confirmRecal() {
   const { schoolId, spells } = augurState.recalResult;
   const result = await apiFetch('/api/augur/recalibrate/confirm', { school_id: schoolId, spells });
-  if (result.error) { alert(result.error); return; }
+  if (result.error) { showError(result.error); return; }
   const school = getSchool(schoolId);
   if (school) school.spells = result.spells;
   if (activeSchoolId === schoolId) renderDrawer();
@@ -777,7 +809,7 @@ async function doAugurDiscover() {
   if (result.error || !result.name) {
     augurState.discoverStage = 'input';
     renderAugurTab();
-    alert(result.error || 'The Augur could not conceive a school. Try again.');
+    showError(result.error || 'The Augur could not conceive a school. Try again.');
     return;
   }
 
@@ -790,14 +822,14 @@ async function confirmNewSchool() {
   if (!augurState.discoverPreview) return;
   const name    = document.getElementById('discover-name-input')?.value.trim()   || augurState.discoverPreview.name;
   const flavour = document.getElementById('discover-flavour-input')?.value.trim() || augurState.discoverPreview.flavour;
-  if (!name) { alert('A school must have a name.'); return; }
+  if (!name) { showError('A school must have a name.'); return; }
 
   const result = await apiFetch('/api/augur/school/confirm', {
     name, flavour, spells: augurState.discoverPreview.spells,
   });
 
   if (result.error || !result.school) {
-    alert(result.error || 'Failed to create school.');
+    showError(result.error || 'Failed to create school.');
     return;
   }
 

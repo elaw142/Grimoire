@@ -101,8 +101,8 @@
     </div>
     <div id="menu-content" class="menu-content"></div>
     <div class="menu-footer">
-      <form method="post" action="/logout" style="display:inline;">
-        <button class="reset-btn" type="submit" onclick="return confirm('Sign out?')">SIGN OUT</button>
+      <form id="logout-form" method="post" action="/logout" style="display:inline;">
+        <button class="reset-btn" type="button" onclick="confirmSignOut()">SIGN OUT</button>
       </form>
     </div>
   </div>
@@ -118,6 +118,24 @@
     <div class="recal-panel-actions">
       <button class="consult-btn" onclick="dismissRecal()">DENY</button>
       <button class="oracle-submit" onclick="acceptRecal()">ACCEPT</button>
+    </div>
+  </div>
+</div>
+
+<!-- Error toast -->
+<div id="error-toast" class="error-toast hidden">
+  <div class="error-toast-eyebrow">THE AUGUR SPEAKS</div>
+  <div class="error-toast-msg" id="error-toast-msg"></div>
+</div>
+
+<!-- Themed confirm dialog -->
+<div id="confirm-dialog" class="confirm-dialog hidden">
+  <div class="confirm-dialog-inner">
+    <div class="confirm-dialog-eyebrow">HEED THIS WARNING</div>
+    <div class="confirm-dialog-msg" id="confirm-dialog-msg"></div>
+    <div class="confirm-dialog-actions">
+      <button class="consult-btn" id="confirm-dialog-cancel">CANCEL</button>
+      <button class="oracle-submit" id="confirm-dialog-ok">CONFIRM</button>
     </div>
   </div>
 </div>
