@@ -13,7 +13,7 @@ app.secret_key = os.environ.get('SECRET_KEY', 'grimoire-dev-secret-change-in-pro
 
 DATABASE = os.path.join(os.path.dirname(__file__), 'grimoire.db')
 OLLAMA_URL = 'http://localhost:11434/api/generate'
-OLLAMA_MODEL = 'llama3.1:8b'
+OLLAMA_MODEL = 'mistral:7b'
 XP_PER_LEVEL = 100
 
 RANKS = [
