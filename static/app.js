@@ -303,7 +303,8 @@ function renderDrawer() {
         <button class="oracle-submit" onclick="submitDeed()" ${deedLoading ? 'disabled' : ''}>
           ${deedLoading ? '<div class="ai-spinner"></div>' : 'SUBMIT'}
         </button>
-      </div>`;
+      </div>
+      ${deedLoading ? `<div id="deed-flavour" class="recal-flavour-text" style="font-size:11px;color:#7a6a50;font-style:italic;margin-top:8px;text-align:center;"></div>` : ''}`;
   } else {
     const v = pendingVerdict;
     oracleSection = `
@@ -376,8 +377,14 @@ async function submitDeed() {
   if (!deed) return;
   deedLoading = true;
   renderDrawer();
-  const result = await apiFetch('/api/augur/deed', { school_id: activeSchoolId, deed });
-  deedLoading = false;
+  setTimeout(() => startRecalFlavour('deed-flavour'), 0);
+  let result;
+  try {
+    result = await apiFetch('/api/augur/deed', { school_id: activeSchoolId, deed });
+  } finally {
+    stopRecalFlavour();
+    deedLoading = false;
+  }
   pendingVerdict = result.error
     ? { deed, xp: 0, verdict: result.error, error: true }
     : { deed, xp: result.xp, verdict: result.verdict, error: false };
@@ -411,19 +418,21 @@ const RECAL_FLAVOUR_LINES = [
 ];
 let _recalFlavourTimer = null;
 
-function startRecalFlavour() {
-  const el = document.getElementById('recal-flavour-text');
+function startRecalFlavour(elId = 'recal-flavour-text') {
+  stopRecalFlavour();
+  const el = document.getElementById(elId);
   if (!el) return;
   let i = 0;
   el.textContent = RECAL_FLAVOUR_LINES[0];
+  el.style.opacity = '1';
   _recalFlavourTimer = setInterval(() => {
     i = (i + 1) % RECAL_FLAVOUR_LINES.length;
     el.style.opacity = '0';
     setTimeout(() => {
-      el.textContent = RECAL_FLAVOUR_LINES[i];
-      el.style.opacity = '1';
+      const current = document.getElementById(elId);
+      if (current) { current.textContent = RECAL_FLAVOUR_LINES[i]; current.style.opacity = '1'; }
     }, 300);
-  }, 2500);
+  }, 5000);
 }
 
 function stopRecalFlavour() {
@@ -438,14 +447,18 @@ async function triggerRecalibrate(schoolId) {
   document.getElementById('recal-panel-loading').style.display = '';
   document.getElementById('recal-panel-results').style.display = 'none';
   document.getElementById('recal-panel').classList.remove('hidden');
-  startRecalFlavour();
+  startRecalFlavour('recal-flavour-text');
 
-  const result = await apiFetch('/api/augur/recalibrate', { school_id: schoolId, context: '' });
-  stopRecalFlavour();
+  let result;
+  try {
+    result = await apiFetch('/api/augur/recalibrate', { school_id: schoolId, context: '' });
+  } finally {
+    stopRecalFlavour();
+  }
 
-  if (result.error || !result.spells) {
+  if (!result || result.error || !result.spells) {
     document.getElementById('recal-panel').classList.add('hidden');
-    showError(result.error || 'The Augur could not recalibrate at this time.');
+    showError((result && result.error) || 'The Augur could not recalibrate at this time.');
     return;
   }
 
@@ -670,12 +683,13 @@ function renderRecalibrateSection() {
   ).join('');
 
   if (st.recalLoading) {
+    setTimeout(() => startRecalFlavour('augur-recal-flavour'), 0);
     return `
       <div class="augur-section">
         <div class="augur-section-title">RECALIBRATE A SCHOOL</div>
         <div style="text-align:center;padding:24px 0;">
           <div class="ai-spinner" style="width:18px;height:18px;border-width:2px;margin:0 auto 12px;"></div>
-          <div style="font-family:'Cinzel',serif;font-size:10px;letter-spacing:3px;color:#7a6a50;">
+          <div id="augur-recal-flavour" class="recal-flavour-text" style="font-family:'Cinzel',serif;font-size:10px;letter-spacing:2px;color:#7a6a50;">
             THE AUGUR DELIBERATES&hellip;
           </div>
         </div>
@@ -805,8 +819,13 @@ async function doAugurRecalibrate() {
   augurState.recalLoading = true;
   renderAugurTab();
 
-  const result = await apiFetch('/api/augur/recalibrate', { school_id: schoolId, context });
-  augurState.recalLoading = false;
+  let result;
+  try {
+    result = await apiFetch('/api/augur/recalibrate', { school_id: schoolId, context });
+  } finally {
+    stopRecalFlavour();
+    augurState.recalLoading = false;
+  }
 
   if (!result || result.error || !result.spells) {
     augurState.recalResult = null;
