@@ -398,6 +398,38 @@ async function acceptVerdict() {
   closeDrawer();
 }
 
+// ── Recal panel flavour text cycling ─────────────────────────────────────────
+const RECAL_FLAVOUR_LINES = [
+  'The Augur peers into your potential\u2026',
+  'Recalibrating your arcane signature\u2026',
+  'The stars are being consulted\u2026',
+  'Ancient rites are being rewritten\u2026',
+  'Your deeds are being weighed\u2026',
+  'The Augur communes with the void\u2026',
+  'New trials are being forged\u2026',
+  'The ledger of fate is being revised\u2026',
+];
+let _recalFlavourTimer = null;
+
+function startRecalFlavour() {
+  const el = document.getElementById('recal-flavour-text');
+  if (!el) return;
+  let i = 0;
+  el.textContent = RECAL_FLAVOUR_LINES[0];
+  _recalFlavourTimer = setInterval(() => {
+    i = (i + 1) % RECAL_FLAVOUR_LINES.length;
+    el.style.opacity = '0';
+    setTimeout(() => {
+      el.textContent = RECAL_FLAVOUR_LINES[i];
+      el.style.opacity = '1';
+    }, 300);
+  }, 2500);
+}
+
+function stopRecalFlavour() {
+  if (_recalFlavourTimer) { clearInterval(_recalFlavourTimer); _recalFlavourTimer = null; }
+}
+
 // ── Auto-recalibrate on rank-up (panel flow) ──────────────────────────────────
 async function triggerRecalibrate(schoolId) {
   const school = getSchool(schoolId);
@@ -406,8 +438,10 @@ async function triggerRecalibrate(schoolId) {
   document.getElementById('recal-panel-loading').style.display = '';
   document.getElementById('recal-panel-results').style.display = 'none';
   document.getElementById('recal-panel').classList.remove('hidden');
+  startRecalFlavour();
 
   const result = await apiFetch('/api/augur/recalibrate', { school_id: schoolId, context: '' });
+  stopRecalFlavour();
 
   if (result.error || !result.spells) {
     document.getElementById('recal-panel').classList.add('hidden');

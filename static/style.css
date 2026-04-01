@@ -830,6 +830,10 @@ a:hover { color: #e8d5a8; }
   padding: 16px 0 4px;
 }
 
+.recal-flavour-text {
+  transition: opacity 0.3s ease;
+}
+
 .levelup-banner {
   position: fixed;
   top: 0; left: 0; right: 0;
