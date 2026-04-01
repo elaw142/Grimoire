@@ -805,6 +805,23 @@ def compute_title(schools):
     return template.format(name=name)
 
 
+@app.route('/api/augur/warmup', methods=['POST'])
+@require_login_api
+def api_augur_warmup():
+    """Fire a minimal prompt to load the model into memory. Response is ignored."""
+    try:
+        requests.post(OLLAMA_URL, json={
+            'model': OLLAMA_MODEL,
+            'prompt': 'Reply with valid JSON: {"ok":true}',
+            'stream': False,
+            'format': 'json',
+            'options': {'num_predict': 8},
+        }, timeout=120)
+    except Exception as e:
+        log.info('warmup: %s', e)
+    return jsonify({'ok': True})
+
+
 @app.route('/api/augur/title', methods=['POST'])
 @require_login_api
 def api_augur_title():
