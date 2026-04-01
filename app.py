@@ -134,6 +134,7 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             school_id INTEGER NOT NULL,
             name TEXT NOT NULL,
+            description TEXT NOT NULL DEFAULT '',
             xp INTEGER NOT NULL,
             FOREIGN KEY (school_id) REFERENCES schools(id) ON DELETE CASCADE
         );
@@ -570,13 +571,14 @@ def _save_recal_spells(db, school_id, spells):
     db.execute('DELETE FROM spells WHERE school_id=?', (school_id,))
     new_spells = []
     for sp in spells:
+        desc = sp.get('description', '') or ''
         cur = db.execute(
-            'INSERT INTO spells (school_id, name, xp) VALUES (?,?,?)',
-            (school_id, sp['name'], sp['xp']),
+            'INSERT INTO spells (school_id, name, description, xp) VALUES (?,?,?,?)',
+            (school_id, sp['name'], desc[:120], sp['xp']),
         )
         new_spells.append({
             'id': cur.lastrowid, 'name': sp['name'],
-            'description': sp['description'], 'xp': sp['xp'], 'school_id': school_id,
+            'description': desc, 'xp': sp['xp'], 'school_id': school_id,
         })
     db.commit()
     return new_spells
@@ -705,11 +707,12 @@ def api_augur_school_confirm():
     for sp in spells[:5]:
         if 'name' in sp and 'xp' in sp:
             sp_xp = max(10, min(50, int(sp['xp'])))
+            sp_desc = str(sp.get('description', ''))[:120]
             sp_cur = db.execute(
-                'INSERT INTO spells (school_id, name, xp) VALUES (?,?,?)',
-                (school_id, str(sp['name'])[:80], sp_xp),
+                'INSERT INTO spells (school_id, name, description, xp) VALUES (?,?,?,?)',
+                (school_id, str(sp['name'])[:80], sp_desc, sp_xp),
             )
-            new_spells.append({'id': sp_cur.lastrowid, 'name': sp['name'], 'description': str(sp.get('description',''))[:120], 'xp': sp_xp, 'school_id': school_id})
+            new_spells.append({'id': sp_cur.lastrowid, 'name': sp['name'], 'description': sp_desc, 'xp': sp_xp, 'school_id': school_id})
 
     db.execute('INSERT INTO user_xp (user_id, school_id, xp) VALUES (?,?,0)', (user_id, school_id))
     db.commit()
@@ -842,6 +845,15 @@ init_db()
 try:
     _mig = sqlite3.connect(DATABASE)
     _mig.execute('ALTER TABLE users ADD COLUMN ai_title TEXT')
+    _mig.commit()
+    _mig.close()
+except Exception:
+    pass
+
+# Migrate existing DBs that predate the spells.description column
+try:
+    _mig = sqlite3.connect(DATABASE)
+    _mig.execute("ALTER TABLE spells ADD COLUMN description TEXT NOT NULL DEFAULT ''")
     _mig.commit()
     _mig.close()
 except Exception:
