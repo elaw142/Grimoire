@@ -496,6 +496,15 @@ def api_augur_accept():
     return jsonify(result)
 
 
+SCHOOL_HABIT_EXAMPLES = {
+    'Restoration': '"Sleep 7-9 hours", "Drink 2 litres of water", "Eat fruits and vegetables", "Cook a healthy meal", "Take a nap", "Follow a sleep schedule"',
+    'Transmutation': '"Complete a full workout", "Go for a 5km run", "Walk 8000 steps", "Do 20 minutes of stretching", "Complete 50 push-ups", "Cycle for 30 minutes"',
+    'Divination': '"Meditate for 10 minutes", "Write in a journal for 10 minutes", "Spend 30 minutes in nature", "Practice 5 minutes of breathwork", "Do a gratitude list", "Spend time in silence"',
+    'Artifice': '"Complete a 1-hour deep work session", "Read for 30 minutes", "Learn one new thing", "Finish a key task", "Study for 45 minutes", "Write 500 words"',
+    'Enchantment': '"Have a meaningful conversation", "Reach out to a friend", "Spend quality time with someone", "Do something kind for another person", "Attend a social event", "Write a letter or message to someone"',
+}
+
+
 def _generate_recal_spells(school, level, context, db, user_id):
     """Generate recalibrated spells via AI. Returns list of spell dicts or None on failure."""
     school_id = school['id']
@@ -508,37 +517,38 @@ def _generate_recal_spells(school, level, context, db, user_id):
         freq[row['deed_name']] = freq.get(row['deed_name'], 0) + 1
     summary = ', '.join(f'"{k}" \xd7{v}' for k, v in freq.items()) or 'none yet'
 
+    domain_examples = SCHOOL_HABIT_EXAMPLES.get(school['name'], '')
+    if not domain_examples:
+        # For custom schools, derive examples from the flavour text
+        domain_examples = f'habits directly related to: {school["flavour"]}'
+
     system = (
         'You are the Augur — a dark fantasy sage calibrating a hero\'s training regimen. '
         'Return ONLY valid JSON: {"spells":[{"name":"string","description":"string","xp":number}]}. '
         '4-5 spells. '
-        'RULE 1 — "description" MUST be a SIMPLE, MUNDANE, real-world daily habit. '
-        'It must sound like something a normal person actually does in their daily life. '
-        'GOOD descriptions: "Sleep 7-9 hours", "Drink 2 litres of water", "Walk 8000 steps", '
-        '"Read for 20 minutes", "Cook a healthy meal", "Meditate for 10 minutes", "Journal for 5 minutes". '
-        'BAD descriptions (NEVER do this): "Commune with the forest spirits", "Forge your will in shadow", '
-        '"Seek visions of clarity in the abyss", "Undertake the trial of iron". '
-        'The description is ALWAYS a plain real-world task. It is NEVER fantasy-flavoured. '
-        'RULE 2 — "name" is a short fantasy incantation title that wraps that plain real-world task. '
-        'This is the ONLY part that is fantasy-themed. '
-        'Mix two styles: (A) Latin/mystical words (e.g. "Somnium", "Hydor", "Ignis Vitae", "Cibus Sanctus"). '
+        'RULE 1 — every spell must be a habit from the school\'s domain. '
+        'Do NOT generate habits from other domains. '
+        'RULE 2 — "description" is a SIMPLE, MUNDANE, real-world daily task. Never fantasy-flavoured. '
+        'BAD descriptions (never do this): "Commune with spirits", "Forge your will in shadow", "Seek visions in the abyss". '
+        'RULE 3 — "name" is a short fantasy incantation title wrapping the real-world task. This is the ONLY fantasy-flavoured part. '
+        'Mix two styles: (A) Latin/mystical words (e.g. "Somnium", "Hydor", "Ignis Vitae"). '
         '(B) Fantasy patterns (e.g. "Hex of Fortitude", "Rite of Iron", "Oath of Clarity"). '
         'Scale name intensity by level — '
-        'Levels 1-9: plain and simple — "Rest Rite", "Somnium", "Hydor", "Iron Oath". '
-        'Levels 10-19: more dramatic — "Rite of the Iron Body", "Vigil of Clarity", "Ignis Vitae". '
-        'Levels 20-29: intense and dark — "Oath of the Undying Flame", "Cibus Sanctus Eternum". '
-        'Levels 30+: legendary and esoteric — "The Eternal Vigil of Ash and Marrow". '
-        'RULE 3 — every habit must belong to the school\'s domain. '
+        'Levels 1-9: simple — "Rest Rite", "Somnium", "Iron Oath". '
+        'Levels 10-19: dramatic — "Rite of the Iron Body", "Vigil of Clarity". '
+        'Levels 20-29: dark — "Oath of the Undying Flame", "Cibus Sanctus Eternum". '
+        'Levels 30+: legendary — "The Eternal Vigil of Ash and Marrow". '
         'XP 10-50 scaled to effort. No markdown, no extra keys.'
     )
     user_msg = (
-        f'SCHOOL: {school["name"].upper()} — {school["flavour"]}\n'
-        f'ALL spells must be habits for {school["name"]} practitioners ONLY.\n'
+        f'SCHOOL: {school["name"].upper()}\n'
+        f'Domain: {school["flavour"]}\n'
+        f'Example habits for this school: {domain_examples}\n'
         f'Level {level}. Recent acts: {summary}.\n'
     )
     if context:
         user_msg += f'Seeker\'s guidance: "{context}"\n'
-    user_msg += 'Rules: harder demands at higher levels; reduce XP for overused habits; introduce fresh challenges.'
+    user_msg += 'Harder demands at higher levels; reduce XP for overused habits; introduce fresh challenges.'
 
     result = call_augur(system, user_msg, num_predict=550, temperature=0.4)
     if not result or 'spells' not in result or not result['spells']:
