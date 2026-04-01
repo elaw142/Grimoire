@@ -824,6 +824,12 @@ a:hover { color: #e8d5a8; }
   gap: 8px;
 }
 
+.recal-panel-spinner {
+  display: flex;
+  justify-content: center;
+  padding: 16px 0 4px;
+}
+
 .levelup-banner {
   position: fixed;
   top: 0; left: 0; right: 0;
