@@ -164,8 +164,6 @@ async function applyXPResult(result) {
   prependLogEntry(school, result);
   if (result.leveled_up) {
     showBanner(school, result.level, result.rank);
-  }
-  if (result.rank_changed) {
     refreshAITitle();
   }
 }
@@ -702,7 +700,7 @@ function renderOrrery() {
   if (!el) return;
 
   const N   = schools.length;
-  const CX  = 160, CY = 160, R = 105, R_LABEL = 136;
+  const CX  = 200, CY = 200, R = 110, R_LABEL = 148;
   const MAX_LV = 30;
 
   const angles = schools.map((_, i) => (i / N) * 2 * Math.PI - Math.PI / 2);
@@ -746,7 +744,7 @@ function renderOrrery() {
     const sinA   = Math.sin(a);
     const cosA   = Math.cos(a);
     const anchor = cosA > 0.3 ? 'start' : cosA < -0.3 ? 'end' : 'middle';
-    const name   = s.name.length > 11 ? s.name.slice(0, 10) + '\u2026' : s.name;
+    const name   = s.name.length > 12 ? s.name.slice(0, 11) + '\u2026' : s.name;
     const rank   = s.rank || getRank(s.level);
 
     // Push labels further out; for top/bottom nodes shift horizontally a bit
@@ -759,10 +757,10 @@ function renderOrrery() {
 
     return `
       <text x="${lx}" y="${nameY}" text-anchor="${anchor}" dominant-baseline="auto"
-        fill="${s.color}" font-family="Cinzel,serif" font-size="8.5" font-weight="600"
-        letter-spacing="0.3">${name.toUpperCase()}</text>
+        fill="${s.color}" font-family="Cinzel,serif" font-size="9" font-weight="600"
+        letter-spacing="0.5">${name.toUpperCase()}</text>
       <text x="${lx}" y="${rankY}" text-anchor="${anchor}" dominant-baseline="auto"
-        fill="${rank.color}" font-family="Cinzel,serif" font-size="7.5">
+        fill="${rank.color}" font-family="Cinzel,serif" font-size="8">
         LV${s.level} ${rank.name}</text>`;
   }).join('');
 
@@ -773,8 +771,8 @@ function renderOrrery() {
   el.innerHTML = `
     <div class="orrery-title">THE ORRERY</div>
     <div class="orrery-sub">Constellation of your arcane schools.</div>
-    <svg viewBox="0 0 320 320" xmlns="http://www.w3.org/2000/svg"
-         style="width:100%;max-width:360px;display:block;margin:0 auto;overflow:visible;">
+    <svg viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg"
+         style="width:100%;max-width:420px;display:block;margin:0 auto;">
       ${grid}
       ${spokes}
       <polygon points="${dataPts}"

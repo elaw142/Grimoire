@@ -732,53 +732,73 @@ def api_augur_school_confirm():
     })
 
 
-# Titles per school per rank. Custom schools fall back to generic track.
+# Titles per school per rank. Multiple options per rank; picked by dominant_level % len.
 SCHOOL_TITLES = {
     'Restoration': {
-        'F': 'Weary Mender',       'E': 'Initiate of Restoration',
-        'D': 'Apprentice Healer',  'C': 'Practitioner of Restoration',
-        'B': 'Adept of Restoration', 'A': 'Master Healer',
-        'S': 'Sovereign of Restoration',
+        'F': ['Sickly Wretch',         'Hollow Vessel',         'Ailing Novice'],
+        'E': ['Weary Mender',          'Faltering Healer',      'Fledgling Restorer'],
+        'D': ['Apprentice Healer',     'Student of Restoration','Steadfast Novice'],
+        'C': ['Practitioner of Restoration', 'Devoted Healer',  'Steadfast Restorer'],
+        'B': ['Adept of Restoration',  'Seasoned Healer',       'Veteran Mender',    'Tried Restorer'],
+        'A': ['Grand Restorer',        'Healer of the Weary',   'Iron-Willed Mender', 'Warden of Flesh'],
+        'S': ['Master Healer',         'Undying Restorer',      'Eternal Mender',    'The Unbroken'],
     },
     'Transmutation': {
-        'F': 'Untested Forger',    'E': 'Initiate of Transmutation',
-        'D': 'Apprentice Forger',  'C': 'Practitioner of Transmutation',
-        'B': 'Adept of Transmutation', 'A': 'Master Transmuter',
-        'S': 'Sovereign of Transmutation',
+        'F': ['Soft-Bodied',           'Untempered',            'Untested Forger'],
+        'E': ['Fumbling Shaper',       'Aspiring Forger',       'Fledgling Transmuter'],
+        'D': ['Apprentice Forger',     'Student of Transmutation', 'Iron Novice'],
+        'C': ['Practitioner of Transmutation', 'Iron Devotee',  'Steady Forger'],
+        'B': ['Adept of Transmutation','Seasoned Forger',       'Veteran Shaper',    'Iron-Willed'],
+        'A': ['Grand Transmuter',      'Forged in Discipline',  'Iron-Clad',         'Relentless Shaper'],
+        'S': ['Master Transmuter',     'Unbreakable',           'Eternal Forger',    'The Reforged'],
     },
     'Divination': {
-        'F': 'Clouded Seer',       'E': 'Initiate of Divination',
-        'D': 'Apprentice Seer',    'C': 'Practitioner of Divination',
-        'B': 'Adept of Divination', 'A': 'Master Diviner',
-        'S': 'Sovereign of Divination',
+        'F': ['Clouded Mind',          'Murky Gazer',           'Unfocused'],
+        'E': ['Clouded Seer',          'Fumbling Gazer',        'Fledgling Diviner'],
+        'D': ['Apprentice Seer',       'Student of Divination', 'Seeking Gazer'],
+        'C': ['Practitioner of Divination', 'Focused Seer',    'Clear-Eyed'],
+        'B': ['Adept of Divination',   'Seasoned Gazer',        'Veteran Seer',      'Still-Minded'],
+        'A': ['Grand Diviner',         'Far-Sighted',           'Keeper of Clarity', 'Watcher of Self'],
+        'S': ['Master Diviner',        'All-Seeing',            'Eternal Seer',      'The Unfogged'],
     },
     'Artifice': {
-        'F': 'Rough Craftsman',    'E': 'Initiate of Artifice',
-        'D': 'Apprentice Artificer', 'C': 'Practitioner of Artifice',
-        'B': 'Adept of Artifice',  'A': 'Master Artificer',
-        'S': 'Sovereign of Artifice',
+        'F': ['Rough-Handed',          'Fumbling Craftsman',    'Unfinished Work'],
+        'E': ['Clumsy Craftsman',      'Aspiring Artificer',    'Fledgling Maker'],
+        'D': ['Apprentice Artificer',  'Student of Artifice',   'Steady Hand'],
+        'C': ['Practitioner of Artifice', 'Reliable Craftsman', 'Devoted Artificer'],
+        'B': ['Adept of Artifice',     'Seasoned Artificer',    'Veteran Craftsman', 'Methodical Maker'],
+        'A': ['Grand Artificer',       'Architect of Habit',    'Rune-Carver',       'Deliberate Maker'],
+        'S': ['Master Artificer',      'Living Rune',           'Eternal Craftsman', 'The Completed Work'],
     },
     'Enchantment': {
-        'F': 'Unbound Soul',       'E': 'Initiate of Enchantment',
-        'D': 'Apprentice Enchanter', 'C': 'Practitioner of Enchantment',
-        'B': 'Adept of Enchantment', 'A': 'Master Enchanter',
-        'S': 'Sovereign of Enchantment',
+        'F': ['Unnoticed',             'Awkward Presence',      'Hollow Voice'],
+        'E': ['Unbound Soul',          'Fumbling Binder',       'Fledgling Enchanter'],
+        'D': ['Apprentice Enchanter',  'Student of Enchantment','Seeking Binder'],
+        'C': ['Practitioner of Enchantment', 'Silver-Tongued', 'Devoted Enchanter'],
+        'B': ['Adept of Enchantment',  'Seasoned Enchanter',    'Veteran Binder',    'Warm Presence'],
+        'A': ['Grand Enchanter',       'Heart-Speaker',         'Keeper of Bonds',   'The Beloved'],
+        'S': ['Master Enchanter',      'Soul-Weaver',           'Eternal Binder',    'The Unifying'],
     },
 }
 
-# Generic titles for custom schools or well-rounded characters
 BALANCED_TITLES = {
-    'F': 'Unproven Initiate',   'E': 'Apprentice of the Arcane',
-    'D': 'Journeyman Mage',     'C': 'Arcane Practitioner',
-    'B': 'Arcane Adept',        'A': 'Master of the Arcane',
-    'S': 'Archmage',
+    'F': ['Lost',                  'Directionless',         'Scattered'],
+    'E': ['Unproven Initiate',     'Wandering Apprentice',  'Aimless Seeker'],
+    'D': ['Apprentice of the Arcane', 'Journeyman',         'Fledgling Mage'],
+    'C': ['Arcane Practitioner',   'Journeyman Mage',       'Well-Rounded Scholar'],
+    'B': ['Arcane Adept',          'Skilled Mage',          'Seasoned Scholar',   'Balanced Seeker'],
+    'A': ['Grand Scholar',         'Arcane Veteran',        'Keeper of Many Arts', 'The Versatile'],
+    'S': ['Master of the Arcane',  'Archmage',              'Grand Mage',         'The Boundless'],
 }
 
 CUSTOM_SCHOOL_TITLES = {
-    'F': 'Fledgling Initiate',  'E': 'Initiate of {name}',
-    'D': 'Apprentice of {name}', 'C': 'Practitioner of {name}',
-    'B': 'Adept of {name}',     'A': 'Master of {name}',
-    'S': 'Sovereign of {name}',
+    'F': ['Lost in {name}',           'Fumbling {name} Novice',    'Unproven in {name}',       'Stumbling Seeker'],
+    'E': ['Fledgling {name} Seeker',  'Wanderer of {name}',        'Aspiring {name} Student',  'Initiate of {name}'],
+    'D': ['Apprentice of {name}',     'Student of {name}',         'Earnest {name} Learner',   'Devoted {name} Novice'],
+    'C': ['Practitioner of {name}',   'Devotee of {name}',         '{name} Journeyman',        'Steady {name} Scholar'],
+    'B': ['Adept of {name}',          'Veteran of {name}',         '{name} Specialist',        'Seasoned {name} Seeker'],
+    'A': ['Scholar of {name}',        'Grand {name} Scholar',      'Distinguished {name} Adept', '{name} Expert'],
+    'S': ['Master of {name}',         'Eternal Sage of {name}',    'Grand Master of {name}',   'Undying {name} Scholar'],
 }
 
 
@@ -791,15 +811,17 @@ def compute_title(schools):
     is_specialised = get_rank(dominant['level'])['name'] != get_rank(avg_others_level)['name']
     overall_rank = get_rank(round(sum(s['level'] for s in schools) / len(schools)))['name']
 
+    def pick(options, level):
+        return options[level % len(options)] if isinstance(options, list) else options
+
     if not is_specialised:
-        return BALANCED_TITLES.get(overall_rank, 'Arcane Practitioner')
+        return pick(BALANCED_TITLES.get(overall_rank, ['Arcane Practitioner']), dominant['level'])
 
     rank = dominant['rank']['name']
     name = dominant['name']
     if name in SCHOOL_TITLES:
-        return SCHOOL_TITLES[name].get(rank, f'Initiate of {name}')
-    # Custom school
-    template = CUSTOM_SCHOOL_TITLES.get(rank, 'Initiate of {name}')
+        return pick(SCHOOL_TITLES[name].get(rank, [f'Initiate of {name}']), dominant['level'])
+    template = pick(CUSTOM_SCHOOL_TITLES.get(rank, ['Initiate of {name}']), dominant['level'])
     return template.format(name=name)
 
 
