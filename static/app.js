@@ -1023,11 +1023,22 @@ async function renderChronicleMilestones() {
     const icon  = ICONS[m.type] || '·';
     const color = m.school_color || '#c9a227';
     const date  = formatDateLabel(m.occurred_at.slice(0, 10));
+
+    // Colour "Rank X" with the rank's colour, "Level N" with the school colour
+    let desc = escHtml(m.description);
+    desc = desc.replace(/Rank ([FEDCBAS])/g, (_, r) => {
+      const rc = RANKS.find(x => x.name === r)?.color || color;
+      return `Rank <span style="color:${rc};font-weight:700;">${r}</span>`;
+    });
+    desc = desc.replace(/Level (\d+)/g, (_, n) =>
+      `Level <span style="color:${color};font-weight:700;">${n}</span>`
+    );
+
     return `
       <div class="milestone-row">
         <div class="milestone-icon" style="color:${color};">${icon}</div>
         <div class="milestone-body">
-          <div class="milestone-desc" style="color:${color};">${escHtml(m.description)}</div>
+          <div class="milestone-desc">${desc}</div>
           <div class="milestone-date">${date}</div>
         </div>
       </div>`;

@@ -317,14 +317,20 @@ def build_xp_result(db, user_id, school_id, xp_gained, deed_name, is_custom=Fals
     # Record milestones
     school_row = db.execute('SELECT name FROM schools WHERE id=?', (school_id,)).fetchone()
     school_name = school_row['name'] if school_row else 'Unknown'
+    rank_change_level = new_level if rank['name'] != old_rank['name'] else None
     if new_level > old_level:
         for lv in range(old_level + 1, new_level + 1):
             if lv % 5 == 0 or lv == 1:
-                record_milestone(db, user_id, 'level',
-                    f'{school_name} reached Level {lv}', school_id)
-    if rank['name'] != old_rank['name']:
+                # Skip standalone level milestone if a rank change also fires at this level
+                if lv != rank_change_level:
+                    record_milestone(db, user_id, 'level',
+                        f'{school_name} reached Level {lv}', school_id)
+    if rank_change_level:
+        rank_verbs = {'E': 'reached', 'D': 'rose to', 'C': 'advanced to',
+                      'B': 'climbed to', 'A': 'ascended to', 'S': 'transcended to'}
+        verb = rank_verbs.get(rank['name'], 'reached')
         record_milestone(db, user_id, 'rank',
-            f'{school_name} ascended to Rank {rank["name"]}', school_id)
+            f'{school_name} {verb} Rank {rank["name"]}', school_id)
     db.commit()
 
     return {
