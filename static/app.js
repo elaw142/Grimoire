@@ -16,6 +16,13 @@ let drawerEditMode = false;
 let menuOpen = false;
 let menuTab  = 'chronicle';
 
+// Chronicle
+let chronicleView  = 'log';       // 'log' | 'calendar'
+let calendarDays   = 90;          // 90 | 180 | 365
+let calendarData   = null;        // cached response from API
+let calendarLoading = false;
+let calendarSelectedDay = null;   // date string 'YYYY-MM-DD'
+
 // Augur tab state
 let augurState = {
   mode:           null,    // null | 'recalibrate' | 'discover'
@@ -663,36 +670,189 @@ function renderMenuContent() {
 function renderChronicle() {
   const el = document.getElementById('menu-content');
   if (!el) return;
-
-  let entriesHtml = '';
-  for (const entry of deedLog.slice(0, 50)) {
-    const date = (entry.cast_at || '').slice(0, 10);
-    entriesHtml += `
-      <div class="log-entry">
-        <div class="log-school-dot"
-             style="background:${entry.school_color};box-shadow:0 0 6px ${entry.school_color}60;"></div>
-        <div class="log-body">
-          <div class="log-deed">
-            ${escHtml(entry.deed_name)}
-            ${entry.is_custom ? '<span class="ai-tag">&#10022; AUGUR</span>' : ''}
-          </div>
-          ${entry.augur_verdict
-            ? `<div class="log-verdict">&ldquo;${escHtml(entry.augur_verdict)}&rdquo;</div>`
-            : ''}
-          <div class="log-meta">${escHtml(entry.school_name)} &middot; ${date}</div>
-        </div>
-        <div class="log-xp" style="color:${entry.school_color};">+${entry.xp} XP</div>
-      </div>`;
-  }
-
   el.innerHTML = `
     <div class="chronicle-title">CHRONICLE OF INCANTATIONS</div>
     <div class="chronicle-sub">A record of your mortal striving.</div>
-    ${entriesHtml || `
-      <div class="chronicle-empty">
-        The Chronicle is empty.<br>
-        <span class="log-empty-sub">PERFORM YOUR FIRST INCANTATION TO BEGIN</span>
-      </div>`}`;
+    <div class="chronicle-toggle">
+      <button class="chr-tab-btn ${chronicleView === 'log'      ? 'active' : ''}" onclick="setChronicleView('log')">LOG</button>
+      <button class="chr-tab-btn ${chronicleView === 'calendar' ? 'active' : ''}" onclick="setChronicleView('calendar')">CALENDAR</button>
+    </div>
+    <div id="chronicle-body"></div>`;
+  if (chronicleView === 'log') renderChronicleLog();
+  else renderChronicleCalendar();
+}
+
+function setChronicleView(view) {
+  chronicleView = view;
+  renderChronicle();
+}
+
+function renderChronicleLog() {
+  const el = document.getElementById('chronicle-body');
+  if (!el) return;
+
+  // Group by date
+  const byDate = {};
+  for (const entry of deedLog) {
+    const date = (entry.cast_at || '').slice(0, 10);
+    if (!byDate[date]) byDate[date] = [];
+    byDate[date].push(entry);
+  }
+
+  const dates = Object.keys(byDate).sort((a, b) => b.localeCompare(a));
+  if (!dates.length) {
+    el.innerHTML = `<div class="chronicle-empty">The Chronicle is empty.<br><span class="log-empty-sub">PERFORM YOUR FIRST INCANTATION TO BEGIN</span></div>`;
+    return;
+  }
+
+  let html = '';
+  for (const date of dates) {
+    const entries = byDate[date];
+    const label = formatDateLabel(date);
+    html += `<div class="chr-date-group"><div class="chr-date-label">${label}</div>`;
+    for (const entry of entries) {
+      html += `
+        <div class="log-entry">
+          <div class="log-school-dot" style="background:${entry.school_color};box-shadow:0 0 6px ${entry.school_color}60;"></div>
+          <div class="log-body">
+            <div class="log-deed">
+              ${escHtml(entry.deed_name)}
+              ${entry.is_custom ? '<span class="ai-tag">&#10022; AUGUR</span>' : ''}
+            </div>
+            ${entry.augur_verdict ? `<div class="log-verdict">&ldquo;${escHtml(entry.augur_verdict)}&rdquo;</div>` : ''}
+            <div class="log-meta">${escHtml(entry.school_name)}</div>
+          </div>
+          <div class="log-xp" style="color:${entry.school_color};">+${entry.xp} XP</div>
+        </div>`;
+    }
+    html += `</div>`;
+  }
+  el.innerHTML = html;
+}
+
+function formatDateLabel(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  const today = new Date(); today.setHours(0,0,0,0);
+  const diff  = Math.round((today - d) / 86400000);
+  if (diff === 0) return 'TODAY';
+  if (diff === 1) return 'YESTERDAY';
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }).toUpperCase();
+}
+
+// ── Chronicle Calendar ────────────────────────────────────────────────────────
+async function renderChronicleCalendar() {
+  const el = document.getElementById('chronicle-body');
+  if (!el) return;
+
+  const rangeBtns = [90, 180, 365].map(d =>
+    `<button class="chr-range-btn ${calendarDays === d ? 'active' : ''}" onclick="setCalendarRange(${d})">${d === 90 ? '90 DAYS' : d === 180 ? '6 MONTHS' : '1 YEAR'}</button>`
+  ).join('');
+
+  if (calendarLoading) {
+    el.innerHTML = `
+      <div class="chr-range-row">${rangeBtns}</div>
+      <div style="text-align:center;padding:40px 0;color:#7a6a50;font-family:'Cinzel',serif;font-size:10px;letter-spacing:2px;">
+        THE AUGUR READS THE STARS&hellip;
+      </div>`;
+    return;
+  }
+
+  if (!calendarData) {
+    calendarLoading = true;
+    renderChronicleCalendar();
+    const result = await apiFetch(`/api/chronicle/calendar?days=${calendarDays}`, null, 'GET');
+    calendarLoading = false;
+    calendarData = result;
+    renderChronicle();
+    return;
+  }
+
+  // Build grid: calendarDays cells ending today
+  const today = new Date(); today.setHours(0,0,0,0);
+  const cells = [];
+  for (let i = calendarDays - 1; i >= 0; i--) {
+    const d = new Date(today); d.setDate(today.getDate() - i);
+    cells.push(d.toISOString().slice(0, 10));
+  }
+
+  // Find max XP in a day for intensity scaling
+  const xpValues = cells.map(c => calendarData[c]?.xp || 0);
+  const maxXP = Math.max(...xpValues, 1);
+
+  const cellsHtml = cells.map(date => {
+    const day = calendarData[date];
+    const xp  = day?.xp || 0;
+    const intensity = xp === 0 ? 0 : Math.max(0.15, xp / maxXP);
+
+    let title = date;
+    let baseColor = '201,162,39';
+    if (day) {
+      const schoolNames = day.schools.map(s => s.name).join(', ');
+      title = `${date}: ${xp} XP — ${schoolNames}`;
+      if (day.schools.length === 1) baseColor = hexToRgb(day.schools[0].color);
+    }
+
+    const bg = xp === 0
+      ? 'rgba(201,162,39,0.05)'
+      : `rgba(${baseColor},${(intensity * 0.7 + 0.1).toFixed(2)})`;
+
+    const isSelected = date === calendarSelectedDay;
+    return `<div class="chr-cal-cell ${isSelected ? 'selected' : ''}"
+      style="background:${bg};${isSelected ? 'outline:1px solid rgba(201,162,39,0.6);' : ''}"
+      title="${escHtml(title)}"
+      onclick="selectCalendarDay('${date}')"></div>`;
+  }).join('');
+
+  // Day detail panel
+  let detailHtml = '';
+  if (calendarSelectedDay && calendarData[calendarSelectedDay]) {
+    const day = calendarData[calendarSelectedDay];
+    const label = formatDateLabel(calendarSelectedDay);
+    const deedRows = day.deeds.map(d => `
+      <div class="log-entry" style="padding:6px 0;">
+        <div class="log-school-dot" style="background:${d.school_color};box-shadow:0 0 4px ${d.school_color}60;"></div>
+        <div class="log-body">
+          <div class="log-deed" style="font-size:13px;">${escHtml(d.deed_name)}${d.is_custom ? ' <span class="ai-tag">&#10022; AUGUR</span>' : ''}</div>
+          <div class="log-meta">${escHtml(d.school_name)}</div>
+        </div>
+        <div class="log-xp" style="color:${d.school_color};">+${d.xp} XP</div>
+      </div>`).join('');
+    detailHtml = `
+      <div class="chr-day-detail">
+        <div class="chr-day-detail-title">${label} &mdash; ${day.xp} XP</div>
+        ${deedRows}
+      </div>`;
+  } else if (calendarSelectedDay) {
+    detailHtml = `<div class="chr-day-detail" style="color:#7a6a50;font-style:italic;text-align:center;">No incantations on this day.</div>`;
+  }
+
+  el.innerHTML = `
+    <div class="chr-range-row">${rangeBtns}</div>
+    <div class="chr-cal-grid" style="--cols:${calendarDays === 90 ? 13 : calendarDays === 180 ? 26 : 53};">${cellsHtml}</div>
+    <div class="chr-cal-legend">
+      <span style="color:#7a6a50;font-size:10px;letter-spacing:1px;">LESS</span>
+      ${[0.05, 0.25, 0.45, 0.65, 0.85].map(o => `<div class="chr-cal-cell" style="background:rgba(201,162,39,${o});pointer-events:none;"></div>`).join('')}
+      <span style="color:#7a6a50;font-size:10px;letter-spacing:1px;">MORE</span>
+    </div>
+    ${detailHtml}`;
+}
+
+function hexToRgb(hex) {
+  const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+  return `${r},${g},${b}`;
+}
+
+async function setCalendarRange(days) {
+  calendarDays = days;
+  calendarData = null;
+  calendarSelectedDay = null;
+  renderChronicle();
+}
+
+function selectCalendarDay(date) {
+  calendarSelectedDay = calendarSelectedDay === date ? null : date;
+  // Re-render just the body to avoid re-fetching
+  renderChronicleCalendar();
 }
 
 // ── Orrery (radar chart) ──────────────────────────────────────────────────────

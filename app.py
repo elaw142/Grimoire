@@ -3,7 +3,7 @@ import json
 import logging
 import os
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import wraps
 from flask import Flask, render_template, request, session, redirect, url_for, jsonify, g
 import bcrypt
@@ -386,7 +386,7 @@ def index():
     deed_log = db.execute(
         'SELECT dl.*, s.name as school_name, s.color as school_color '
         'FROM deed_log dl JOIN schools s ON s.id = dl.school_id '
-        'WHERE dl.user_id = ? ORDER BY dl.cast_at DESC LIMIT 20',
+        'WHERE dl.user_id = ? ORDER BY dl.cast_at DESC LIMIT 200',
         (user_id,),
     ).fetchall()
     deed_log = [dict(d) for d in deed_log]
@@ -893,6 +893,59 @@ def api_delete_school(school_id):
     db.execute('DELETE FROM schools WHERE id=?', (school_id,))
     db.commit()
     return jsonify({'ok': True})
+
+
+# ── Chronicle calendar ───────────────────────────────────────────────────────
+
+@app.route('/api/chronicle/calendar', methods=['GET'])
+@require_login_api
+def api_chronicle_calendar():
+    user_id = session['user_id']
+    days = request.args.get('days', 90, type=int)
+    days = min(days, 365)
+
+    db = get_db()
+    since = (datetime.utcnow() - timedelta(days=days)).date().isoformat()
+
+    rows = db.execute(
+        'SELECT dl.cast_at, dl.xp, dl.deed_name, dl.is_custom, '
+        '       s.name as school_name, s.color as school_color '
+        'FROM deed_log dl JOIN schools s ON s.id = dl.school_id '
+        'WHERE dl.user_id = ? AND dl.cast_at >= ? '
+        'ORDER BY dl.cast_at ASC',
+        (user_id, since),
+    ).fetchall()
+
+    # Aggregate by date
+    from collections import defaultdict
+    days_map = defaultdict(lambda: {'xp': 0, 'count': 0, 'schools': {}, 'deeds': []})
+    for row in rows:
+        date = row['cast_at'][:10]
+        d = days_map[date]
+        d['xp'] += row['xp']
+        d['count'] += 1
+        d['deeds'].append({
+            'deed_name': row['deed_name'],
+            'school_name': row['school_name'],
+            'school_color': row['school_color'],
+            'xp': row['xp'],
+            'is_custom': row['is_custom'],
+        })
+        # Track distinct schools active that day
+        if row['school_name'] not in d['schools']:
+            d['schools'][row['school_name']] = row['school_color']
+
+    # Convert schools dict to list for JSON
+    result = {}
+    for date, d in days_map.items():
+        result[date] = {
+            'xp': d['xp'],
+            'count': d['count'],
+            'schools': [{'name': k, 'color': v} for k, v in d['schools'].items()],
+            'deeds': d['deeds'],
+        }
+
+    return jsonify(result)
 
 
 # ── Edit school / spells ─────────────────────────────────────────────────────

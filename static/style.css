@@ -1096,6 +1096,103 @@ a:hover { color: #e8d5a8; }
   font-size: 15px;
 }
 
+/* ── Chronicle toggle & calendar ─────────────────────────────────────────── */
+.chronicle-toggle {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.chr-tab-btn {
+  background: rgba(201,162,39,0.05);
+  border: 1px solid rgba(201,162,39,0.15);
+  border-radius: 3px;
+  padding: 6px 14px;
+  color: #7a6a50;
+  font-family: 'Cinzel', serif;
+  font-size: 10px;
+  letter-spacing: 2px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.chr-tab-btn:hover  { border-color: rgba(201,162,39,0.35); color: #c9a227; }
+.chr-tab-btn.active { border-color: rgba(201,162,39,0.5); color: #c9a227; background: rgba(201,162,39,0.1); }
+
+.chr-date-group  { margin-bottom: 14px; }
+.chr-date-label  {
+  font-family: 'Cinzel', serif;
+  font-size: 9px;
+  letter-spacing: 2px;
+  color: #7a6a50;
+  margin-bottom: 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(201,162,39,0.08);
+}
+
+.chr-range-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.chr-range-btn {
+  background: rgba(201,162,39,0.05);
+  border: 1px solid rgba(201,162,39,0.15);
+  border-radius: 3px;
+  padding: 5px 12px;
+  color: #7a6a50;
+  font-family: 'Cinzel', serif;
+  font-size: 9px;
+  letter-spacing: 2px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.chr-range-btn:hover  { border-color: rgba(201,162,39,0.35); color: #c9a227; }
+.chr-range-btn.active { border-color: rgba(201,162,39,0.5); color: #c9a227; background: rgba(201,162,39,0.1); }
+
+.chr-cal-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--cols), 1fr);
+  gap: 3px;
+  margin-bottom: 10px;
+}
+
+.chr-cal-cell {
+  aspect-ratio: 1;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: opacity 0.1s;
+}
+.chr-cal-cell:hover   { opacity: 0.75; }
+.chr-cal-cell.selected { outline: 1px solid rgba(201,162,39,0.7); }
+
+.chr-cal-legend {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 16px;
+  font-family: 'Cinzel', serif;
+}
+.chr-cal-legend .chr-cal-cell {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+}
+
+.chr-day-detail {
+  border: 1px solid rgba(201,162,39,0.15);
+  border-radius: 3px;
+  padding: 12px 14px;
+  margin-top: 4px;
+}
+.chr-day-detail-title {
+  font-family: 'Cinzel', serif;
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: #c9a227;
+  margin-bottom: 10px;
+}
+
 /* ── Orrery (radar chart) ─────────────────────────────────────────────────── */
 .orrery-title {
   font-family: 'Cinzel', serif;
