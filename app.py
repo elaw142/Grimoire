@@ -782,13 +782,20 @@ SCHOOL_TITLES = {
 }
 
 BALANCED_TITLES = {
-    'F': ['Lost',                  'Directionless',         'Scattered'],
-    'E': ['Unproven Initiate',     'Wandering Apprentice',  'Aimless Seeker'],
-    'D': ['Apprentice of the Arcane', 'Journeyman',         'Fledgling Mage'],
-    'C': ['Arcane Practitioner',   'Journeyman Mage',       'Well-Rounded Scholar'],
-    'B': ['Arcane Adept',          'Skilled Mage',          'Seasoned Scholar',   'Balanced Seeker'],
-    'A': ['Grand Scholar',         'Arcane Veteran',        'Keeper of Many Arts', 'The Versatile'],
-    'S': ['Master of the Arcane',  'Archmage',              'Grand Mage',         'The Boundless'],
+    'F': ['Lost',                   'Directionless',          'Scattered',            'Unfocused',
+          'Wandering',              'Unproven'],
+    'E': ['Unproven Initiate',      'Wandering Apprentice',   'Aimless Seeker',       'Fumbling Student',
+          'Curious Novice',         'Seeker of Many Things'],
+    'D': ['Apprentice of the Arcane', 'Journeyman',           'Fledgling Mage',       'Student of All Trades',
+          'Earnest Learner',        'Dabbler of Many Arts'],
+    'C': ['Arcane Practitioner',    'Journeyman Mage',        'Well-Rounded Scholar', 'Keeper of Many Rites',
+          'Steady Hand',            'Devoted Generalist',     'Balanced Seeker'],
+    'B': ['Arcane Adept',           'Skilled Mage',           'Seasoned Scholar',     'Versatile Adept',
+          'Many-Pathed',            'Scholar of Many Schools','Keeper of Balance'],
+    'A': ['Grand Scholar',          'Arcane Veteran',         'Keeper of Many Arts',  'The Versatile',
+          'Boundless Seeker',       'Scholar of All Paths',   'The Well-Rounded'],
+    'S': ['Master of the Arcane',   'Archmage',               'Grand Mage',           'The Boundless',
+          'Eternal Scholar',        'The Unspecialised',      'Master of All Rites'],
 }
 
 CUSTOM_SCHOOL_TITLES = {
@@ -805,23 +812,36 @@ CUSTOM_SCHOOL_TITLES = {
 def compute_title(schools):
     if not schools:
         return 'Unproven Initiate'
-    dominant = max(schools, key=lambda s: s['level'])
-    others = [s for s in schools if s['id'] != dominant['id']]
-    avg_others_level = round(sum(s['level'] for s in others) / len(others)) if others else dominant['level']
-    is_specialised = get_rank(dominant['level'])['name'] != get_rank(avg_others_level)['name']
-    overall_rank = get_rank(round(sum(s['level'] for s in schools) / len(schools)))['name']
 
     def pick(options, level):
         return options[level % len(options)] if isinstance(options, list) else options
 
-    if not is_specialised:
-        return pick(BALANCED_TITLES.get(overall_rank, ['Arcane Practitioner']), dominant['level'])
+    # Single school — always specialised
+    if len(schools) == 1:
+        s = schools[0]
+        rank = get_rank(s['level'])['name']
+        name = s['name']
+        if name in SCHOOL_TITLES:
+            return pick(SCHOOL_TITLES[name].get(rank, [f'Initiate of {name}']), s['level'])
+        template = pick(CUSTOM_SCHOOL_TITLES.get(rank, ['Initiate of {name}']), s['level'])
+        return template.format(name=name)
 
-    rank = dominant['rank']['name']
+    dominant = max(schools, key=lambda s: s['level'])
+    dom_level = dominant['level']
+    rank = get_rank(dom_level)['name']
+
+    # Specialised: one school is uniquely the highest AND at least 2 levels above all others
+    others = [s for s in schools if s['id'] != dominant['id']]
+    second_highest = max(s['level'] for s in others)
+    is_specialised = dom_level - second_highest >= 2
+
+    if not is_specialised:
+        return pick(BALANCED_TITLES.get(rank, ['Arcane Practitioner']), dom_level)
+
     name = dominant['name']
     if name in SCHOOL_TITLES:
-        return pick(SCHOOL_TITLES[name].get(rank, [f'Initiate of {name}']), dominant['level'])
-    template = pick(CUSTOM_SCHOOL_TITLES.get(rank, ['Initiate of {name}']), dominant['level'])
+        return pick(SCHOOL_TITLES[name].get(rank, [f'Initiate of {name}']), dom_level)
+    template = pick(CUSTOM_SCHOOL_TITLES.get(rank, ['Initiate of {name}']), dom_level)
     return template.format(name=name)
 
 
