@@ -783,18 +783,19 @@ async function renderChronicleCalendar() {
     const day = calendarData[date];
     const xp  = day?.xp || 0;
     const intensity = xp === 0 ? 0 : Math.max(0.15, xp / maxXP);
+    const alpha = (intensity * 0.7 + 0.1).toFixed(2);
 
     let title = date;
-    let baseColor = '201,162,39';
-    if (day) {
+    let bg = 'rgba(201,162,39,0.05)';
+    if (day && xp > 0) {
       const schoolNames = day.schools.map(s => s.name).join(', ');
       title = `${date}: ${xp} XP — ${schoolNames}`;
-      if (day.schools.length === 1) baseColor = hexToRgb(day.schools[0].color);
+      if (day.schools.length === 1) {
+        bg = `rgba(${hexToRgb(day.schools[0].color)},${alpha})`;
+      } else {
+        bg = makeConicGradient(day.schools, alpha);
+      }
     }
-
-    const bg = xp === 0
-      ? 'rgba(201,162,39,0.05)'
-      : `rgba(${baseColor},${(intensity * 0.7 + 0.1).toFixed(2)})`;
 
     const isSelected = date === calendarSelectedDay;
     return `<div class="chr-cal-cell ${isSelected ? 'selected' : ''}"
@@ -840,6 +841,55 @@ async function renderChronicleCalendar() {
 function hexToRgb(hex) {
   const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
   return `${r},${g},${b}`;
+}
+
+function makeConicGradient(schools, alpha) {
+  const valid = schools.filter(sc => sc.color && sc.color.length === 7);
+  if (!valid.length) return `rgba(201,162,39,${alpha})`;
+
+  const sorted = [...valid].sort((a, b) => (b.xp || 0) - (a.xp || 0));
+  const rawTotal = sorted.reduce((s, sc) => s + (sc.xp || 0), 0);
+  const total = rawTotal || sorted.length;
+
+  const bounds = [0];
+  for (const sc of sorted) {
+    const xp = sc.xp || (rawTotal === 0 ? 1 : 0);
+    bounds.push(bounds[bounds.length - 1] + (xp / total) * 360);
+  }
+
+  // Rotate so the seam lands at the midpoint of the dominant colour's solid zone.
+  // Both sides of the seam then show the same solid colour → completely invisible.
+  const rotOffset = bounds[1] / 2;
+
+  // Compute each segment's solid zone after rotation
+  const segs = sorted.map((sc, i) => {
+    const span = bounds[i + 1] - bounds[i];
+    const blend = Math.min(18, span * 0.25);
+    return {
+      rgb: hexToRgb(sc.color),
+      s: ((bounds[i]     + blend - rotOffset) % 360 + 360) % 360,
+      e: ((bounds[i + 1] - blend - rotOffset) % 360 + 360) % 360,
+    };
+  });
+
+  // The first segment straddles the seam — split it into a tail [s→360] and a head [0→e].
+  // All other segments sit in the middle. CSS extends the head to 0° and the tail to 360°,
+  // so both sides of the seam show the dominant colour.
+  const head = segs[0];
+  const tail = segs[0];
+  const mid  = segs.slice(1);
+
+  const pairs = [
+    { rgb: head.rgb, s: 0,       e: head.e },   // dominant head (0° side of seam)
+    ...mid.map(sg => ({ rgb: sg.rgb, s: sg.s, e: sg.e })),
+    { rgb: tail.rgb, s: tail.s,  e: 360 },       // dominant tail (360° side of seam)
+  ];
+
+  const stops = pairs.map(p =>
+    `rgba(${p.rgb},${alpha}) ${p.s.toFixed(1)}deg ${p.e.toFixed(1)}deg`
+  ).join(', ');
+
+  return `conic-gradient(from ${rotOffset.toFixed(1)}deg, ${stops})`;
 }
 
 async function setCalendarRange(days) {

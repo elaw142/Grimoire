@@ -13,3 +13,5 @@ grimoire_brief.md
 .claude/settings.local.json
 life-rpg.jsx
 todo.md
+*.db-shm
+*.db-wal

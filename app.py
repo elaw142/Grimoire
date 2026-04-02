@@ -932,9 +932,10 @@ def api_chronicle_calendar():
             'xp': row['xp'],
             'is_custom': row['is_custom'],
         })
-        # Track distinct schools active that day
+        # Track XP per school active that day
         if row['school_name'] not in d['schools']:
-            d['schools'][row['school_name']] = row['school_color']
+            d['schools'][row['school_name']] = {'color': row['school_color'], 'xp': 0}
+        d['schools'][row['school_name']]['xp'] += row['xp']
 
     # Convert schools dict to list for JSON
     result = {}
@@ -942,7 +943,7 @@ def api_chronicle_calendar():
         result[date] = {
             'xp': d['xp'],
             'count': d['count'],
-            'schools': [{'name': k, 'color': v} for k, v in d['schools'].items()],
+            'schools': [{'name': k, 'color': v['color'], 'xp': v['xp']} for k, v in d['schools'].items()],
             'deeds': d['deeds'],
         }
 
@@ -1037,10 +1038,11 @@ def api_spell_delete(spell_id):
 
 init_db()
 
-# Migrate existing DBs that predate the ai_title column
+# Migrate existing DBs that predate added columns
 try:
     _mig = sqlite3.connect(DATABASE)
     _mig.execute('ALTER TABLE users ADD COLUMN ai_title TEXT')
+    _mig.execute('ALTER TABLE spells ADD COLUMN description TEXT NOT NULL DEFAULT \'\'')
     _mig.commit()
     _mig.close()
 except Exception:
