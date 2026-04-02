@@ -404,6 +404,9 @@ function renderDrawerEdit() {
         </div>
         <input class="field-input" id="edit-school-name" value="${escHtml(school.name)}" maxlength="50"
                style="flex:1;font-family:'Cinzel',serif;font-size:15px;color:#c9a227;padding:6px 10px;">
+        <div class="school-color-swatch" id="school-color-swatch" style="background:${school.color};"
+             onclick="toggleColorPopover()" title="Change colour"></div>
+        <input type="hidden" id="edit-school-color" value="${school.color}">
         <button class="drawer-close" onclick="closeDrawer()" aria-label="Close">&times;</button>
       </div>
       <textarea class="oracle-input" id="edit-school-flavour" rows="2" maxlength="300"
@@ -455,13 +458,90 @@ function hideAddSpellForm() {
 async function saveSchoolEdit() {
   const name    = (document.getElementById('edit-school-name').value || '').trim();
   const flavour = (document.getElementById('edit-school-flavour').value || '').trim();
+  const color   = document.getElementById('edit-school-color').value;
   if (!name) return;
-  const result = await apiFetch(`/api/school/${activeSchoolId}`, { name, flavour }, 'PUT');
+  const result = await apiFetch(`/api/school/${activeSchoolId}`, { name, flavour, color }, 'PUT');
   if (result.error) { showError(result.error); return; }
   const school = getSchool(activeSchoolId);
-  if (school) { school.name = result.name; school.flavour = result.flavour; }
+  if (school) { school.name = result.name; school.flavour = result.flavour; school.color = result.color; }
   renderDrawerEdit();
   if (typeof renderOrrery === 'function') renderOrrery();
+}
+
+// Fixed S/L keeps all colours in the same muted jewel-tone family as the app
+const COLOR_S = 55, COLOR_L = 62;
+
+function hslToHex(h, s, l) {
+  s /= 100; l /= 100;
+  const a = s * Math.min(l, 1 - l);
+  const f = n => { const k = (n + h / 30) % 12; return l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1)); };
+  return '#' + [f(0), f(8), f(4)].map(x => Math.round(x * 255).toString(16).padStart(2, '0')).join('');
+}
+
+function hexToHue(hex) {
+  const r = parseInt(hex.slice(1,3),16)/255, g = parseInt(hex.slice(3,5),16)/255, b = parseInt(hex.slice(5,7),16)/255;
+  const max = Math.max(r,g,b), min = Math.min(r,g,b), d = max - min;
+  if (d === 0) return 0;
+  let h = max === r ? ((g-b)/d % 6) : max === g ? (b-r)/d + 2 : (r-g)/d + 4;
+  return Math.round(h * 60 + 360) % 360;
+}
+
+function toggleColorPopover() {
+  const existing = document.getElementById('color-popover');
+  if (existing) { existing.remove(); return; }
+
+  const current = document.getElementById('edit-school-color').value;
+  const hue     = hexToHue(current);
+  const swatch  = document.getElementById('school-color-swatch');
+
+  // Hue gradient stops for slider track
+  const gradStops = Array.from({length: 13}, (_,i) => {
+    const h = Math.round(i * 30);
+    return `hsl(${h},${COLOR_S}%,${COLOR_L}%)`;
+  }).join(', ');
+
+  const pop = document.createElement('div');
+  pop.id = 'color-popover';
+  pop.className = 'color-popover';
+  pop.innerHTML = `
+    <div style="display:flex;align-items:center;gap:10px;">
+      <div id="color-hue-preview" style="
+        width:28px;height:28px;border-radius:50%;flex-shrink:0;
+        background:${hslToHex(hue,COLOR_S,COLOR_L)};
+        border:2px solid rgba(255,255,255,0.2);"></div>
+      <input type="range" id="color-hue-slider" class="color-hue-slider"
+             min="0" max="359" value="${hue}"
+             style="--grad:linear-gradient(to right,${gradStops});"
+             oninput="onHueSlide(this.value)">
+    </div>`;
+
+  // Position above the swatch
+  const rect      = swatch.getBoundingClientRect();
+  const drawerEl  = document.querySelector('.panel-drawer');
+  const drawerRect = drawerEl.getBoundingClientRect();
+  pop.style.top   = (rect.bottom - drawerRect.top + 8) + 'px';
+  pop.style.right = (drawerRect.right - rect.right) + 'px';
+
+  drawerEl.appendChild(pop);
+
+  setTimeout(() => document.addEventListener('click', function handler(e) {
+    if (!pop.contains(e.target) && e.target !== swatch) {
+      pop.remove(); document.removeEventListener('click', handler);
+    }
+  }), 0);
+}
+
+function onHueSlide(hue) {
+  const color = hslToHex(parseInt(hue), COLOR_S, COLOR_L);
+  document.getElementById('color-hue-preview').style.background = color;
+  document.getElementById('edit-school-color').value = color;
+  document.getElementById('school-color-swatch').style.background = color;
+}
+
+function pickSchoolColor(color) {
+  document.getElementById('edit-school-color').value = color;
+  document.getElementById('school-color-swatch').style.background = color;
+  document.getElementById('color-popover')?.remove();
 }
 
 async function saveSpellEdit(spellId) {

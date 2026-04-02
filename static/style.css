@@ -520,6 +520,7 @@ a:hover { color: #e8d5a8; }
 @keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
 
 .panel-drawer {
+  position: relative;
   background: #100e0a;
   border: 1px solid rgba(201,162,39,0.2);
   border-bottom: none;
@@ -585,6 +586,59 @@ a:hover { color: #e8d5a8; }
 .drawer-edit-btn:hover { color: #c9a227; }
 
 .edit-spell-row { margin-bottom: 12px; }
+
+.school-color-swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  cursor: pointer;
+  border: 2px solid rgba(255,255,255,0.15);
+  transition: border-color 0.15s, transform 0.15s;
+}
+.school-color-swatch:hover { border-color: rgba(255,255,255,0.4); transform: scale(1.1); }
+
+.color-popover {
+  position: absolute;
+  z-index: 200;
+  background: #1a1510;
+  border: 1px solid rgba(201,162,39,0.25);
+  border-radius: 8px;
+  padding: 10px 12px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.6);
+  width: 180px;
+}
+
+.color-hue-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 10px;
+  border-radius: 5px;
+  background: var(--grad);
+  outline: none;
+  border: 1px solid rgba(255,255,255,0.1);
+  cursor: pointer;
+}
+.color-hue-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #1a1510;
+  border: 2px solid rgba(255,255,255,0.5);
+  cursor: pointer;
+  transition: border-color 0.1s;
+}
+.color-hue-slider::-webkit-slider-thumb:hover { border-color: rgba(255,255,255,0.9); }
+.color-hue-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #1a1510;
+  border: 2px solid rgba(255,255,255,0.5);
+  cursor: pointer;
+}
 
 .drawer-header-actions { display: flex; align-items: center; gap: 4px; margin-left: auto; }
 

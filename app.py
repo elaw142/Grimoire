@@ -959,17 +959,25 @@ def api_school_edit(school_id):
     data = request.get_json()
     name = (data.get('name') or '').strip()[:50]
     flavour = (data.get('flavour') or '').strip()[:300]
+    color = (data.get('color') or '').strip()
     if not name:
         return jsonify({'error': 'Name required'}), 400
+    import re
+    if not re.match(r'^#[0-9a-fA-F]{6}$', color):
+        color = None  # ignore invalid colour values
     db = get_db()
     school = db.execute(
         'SELECT * FROM schools WHERE id=? AND user_id=?', (school_id, user_id)
     ).fetchone()
     if not school:
         return jsonify({'error': 'Not found'}), 404
-    db.execute('UPDATE schools SET name=?, flavour=? WHERE id=?', (name, flavour, school_id))
+    if color:
+        db.execute('UPDATE schools SET name=?, flavour=?, color=? WHERE id=?', (name, flavour, color, school_id))
+    else:
+        db.execute('UPDATE schools SET name=?, flavour=? WHERE id=?', (name, flavour, school_id))
     db.commit()
-    return jsonify({'id': school_id, 'name': name, 'flavour': flavour})
+    effective_color = color or school['color']
+    return jsonify({'id': school_id, 'name': name, 'flavour': flavour, 'color': effective_color})
 
 
 @app.route('/api/school/<int:school_id>/spell', methods=['POST'])
