@@ -760,7 +760,7 @@ async function renderChronicleCalendar() {
   if (!calendarData) {
     calendarLoading = true;
     renderChronicleCalendar();
-    const result = await apiFetch(`/api/chronicle/calendar?days=${calendarDays}`, null, 'GET');
+    const result = await apiFetch('/api/chronicle/calendar', { days: calendarDays });
     calendarLoading = false;
     calendarData = result;
     renderChronicle();

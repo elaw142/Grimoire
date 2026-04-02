@@ -897,11 +897,12 @@ def api_delete_school(school_id):
 
 # ── Chronicle calendar ───────────────────────────────────────────────────────
 
-@app.route('/api/chronicle/calendar', methods=['GET'])
+@app.route('/api/chronicle/calendar', methods=['POST'])
 @require_login_api
 def api_chronicle_calendar():
     user_id = session['user_id']
-    days = request.args.get('days', 90, type=int)
+    data = request.get_json() or {}
+    days = int(data.get('days', 90))
     days = min(days, 365)
 
     db = get_db()
