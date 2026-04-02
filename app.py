@@ -159,6 +159,16 @@ def init_db():
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
             FOREIGN KEY (school_id) REFERENCES schools(id) ON DELETE CASCADE
         );
+        CREATE TABLE IF NOT EXISTS milestones (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            type TEXT NOT NULL,
+            description TEXT NOT NULL,
+            school_id INTEGER,
+            occurred_at TEXT NOT NULL,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY (school_id) REFERENCES schools(id) ON DELETE SET NULL
+        );
     ''')
     db.commit()
     db.close()
@@ -180,6 +190,13 @@ def get_rank(level):
         if level >= r['min_level']:
             rank = r
     return rank
+
+
+def record_milestone(db, user_id, type_, description, school_id=None):
+    db.execute(
+        'INSERT INTO milestones (user_id, type, description, school_id, occurred_at) VALUES (?,?,?,?,?)',
+        (user_id, type_, description, school_id, datetime.utcnow().isoformat()),
+    )
 
 
 def require_login(f):
@@ -296,6 +313,20 @@ def build_xp_result(db, user_id, school_id, xp_gained, deed_name, is_custom=Fals
 
     old_rank = get_rank(old_level)
     rank = get_rank(new_level)
+
+    # Record milestones
+    school_row = db.execute('SELECT name FROM schools WHERE id=?', (school_id,)).fetchone()
+    school_name = school_row['name'] if school_row else 'Unknown'
+    if new_level > old_level:
+        for lv in range(old_level + 1, new_level + 1):
+            if lv % 5 == 0 or lv == 1:
+                record_milestone(db, user_id, 'level',
+                    f'{school_name} reached Level {lv}', school_id)
+    if rank['name'] != old_rank['name']:
+        record_milestone(db, user_id, 'rank',
+            f'{school_name} ascended to Rank {rank["name"]}', school_id)
+    db.commit()
+
     return {
         'school_id': school_id,
         'new_xp': new_xp,
@@ -873,7 +904,11 @@ def api_augur_title():
         return jsonify({'error': 'No schools found'}), 400
 
     title = compute_title(schools)
+    user_row = db.execute('SELECT ai_title FROM users WHERE id=?', (user_id,)).fetchone()
+    old_title = user_row['ai_title'] if user_row else None
     db.execute('UPDATE users SET ai_title=? WHERE id=?', (title, user_id))
+    if title != old_title:
+        record_milestone(db, user_id, 'title', f'Title bestowed: {title}')
     db.commit()
     return jsonify({'title': title})
 
@@ -948,6 +983,28 @@ def api_chronicle_calendar():
         }
 
     return jsonify(result)
+
+
+# ── Chronicle milestones ─────────────────────────────────────────────────────
+
+@app.route('/api/chronicle/milestones', methods=['POST'])
+@require_login_api
+def api_chronicle_milestones():
+    user_id = session['user_id']
+    db = get_db()
+    rows = db.execute(
+        'SELECT m.id, m.type, m.description, m.occurred_at, s.color as school_color '
+        'FROM milestones m LEFT JOIN schools s ON s.id = m.school_id '
+        'WHERE m.user_id = ? ORDER BY m.occurred_at DESC',
+        (user_id,),
+    ).fetchall()
+    return jsonify([{
+        'id':           r['id'],
+        'type':         r['type'],
+        'description':  r['description'],
+        'occurred_at':  r['occurred_at'],
+        'school_color': r['school_color'],
+    } for r in rows])
 
 
 # ── Edit school / spells ─────────────────────────────────────────────────────

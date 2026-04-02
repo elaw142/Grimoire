@@ -17,11 +17,12 @@ let menuOpen = false;
 let menuTab  = 'chronicle';
 
 // Chronicle
-let chronicleView  = 'log';       // 'log' | 'calendar'
+let chronicleView  = 'log';       // 'log' | 'calendar' | 'milestones'
 let calendarDays   = 90;          // 90 | 180 | 365
 let calendarData   = null;        // cached response from API
 let calendarLoading = false;
 let calendarSelectedDay = null;   // date string 'YYYY-MM-DD'
+let milestonesData = null;        // cached milestones from API
 
 // Augur tab state
 let augurState = {
@@ -170,7 +171,9 @@ async function applyXPResult(result) {
   showFloatingXP(result.xp_gained, school.color);
   updateHeaderStats();
   prependLogEntry(school, result);
+  calendarData = null;
   if (result.leveled_up) {
+    milestonesData = null;
     showBanner(school, result.level, result.rank);
     refreshAITitle();
   }
@@ -190,7 +193,10 @@ async function refreshAITitle() {
   const el = document.getElementById('header-ai-title');
   if (!el) return;
   const result = await apiFetch('/api/augur/title', {});
-  if (result.title) el.textContent = result.title;
+  if (result.title) {
+    if (result.title !== el.textContent) milestonesData = null;
+    el.textContent = result.title;
+  }
 }
 
 function prependLogEntry(school, result) {
@@ -464,6 +470,9 @@ async function saveSchoolEdit() {
   if (result.error) { showError(result.error); return; }
   const school = getSchool(activeSchoolId);
   if (school) { school.name = result.name; school.flavour = result.flavour; school.color = result.color; }
+  updateCardDOM(school);
+  const card = document.getElementById(`card-${activeSchoolId}`);
+  if (card) card.style.setProperty('--card-color', result.color + '50');
   renderDrawerEdit();
   if (typeof renderOrrery === 'function') renderOrrery();
 }
@@ -754,12 +763,14 @@ function renderChronicle() {
     <div class="chronicle-title">CHRONICLE OF INCANTATIONS</div>
     <div class="chronicle-sub">A record of your mortal striving.</div>
     <div class="chronicle-toggle">
-      <button class="chr-tab-btn ${chronicleView === 'log'      ? 'active' : ''}" onclick="setChronicleView('log')">LOG</button>
-      <button class="chr-tab-btn ${chronicleView === 'calendar' ? 'active' : ''}" onclick="setChronicleView('calendar')">CALENDAR</button>
+      <button class="chr-tab-btn ${chronicleView === 'log'        ? 'active' : ''}" onclick="setChronicleView('log')">LOG</button>
+      <button class="chr-tab-btn ${chronicleView === 'calendar'   ? 'active' : ''}" onclick="setChronicleView('calendar')">CALENDAR</button>
+      <button class="chr-tab-btn ${chronicleView === 'milestones' ? 'active' : ''}" onclick="setChronicleView('milestones')">MILESTONES</button>
     </div>
     <div id="chronicle-body"></div>`;
   if (chronicleView === 'log') renderChronicleLog();
-  else renderChronicleCalendar();
+  else if (chronicleView === 'calendar') renderChronicleCalendar();
+  else renderChronicleMilestones();
 }
 
 function setChronicleView(view) {
@@ -985,13 +996,53 @@ function selectCalendarDay(date) {
   renderChronicleCalendar();
 }
 
+// ── Chronicle milestones ──────────────────────────────────────────────────────
+async function renderChronicleMilestones() {
+  const el = document.getElementById('chronicle-body');
+  if (!el) return;
+
+  if (!milestonesData) {
+    el.innerHTML = `<div style="text-align:center;color:#7a6a50;font-style:italic;padding:20px;">Consulting the annals…</div>`;
+    const result = await apiFetch('/api/chronicle/milestones', {});
+    if (result.error) { el.innerHTML = `<div style="color:#9a4a4a;">${escHtml(result.error)}</div>`; return; }
+    milestonesData = result;
+    // Re-check we're still on milestones tab
+    if (chronicleView !== 'milestones') return;
+  }
+
+  if (!milestonesData.length) {
+    el.innerHTML = `<div style="text-align:center;color:#7a6a50;font-style:italic;padding:30px 0;">
+      No milestones yet. Keep casting your incantations.
+    </div>`;
+    return;
+  }
+
+  const ICONS = { rank: '⬡', level: '✦', title: '✧' };
+
+  const rows = milestonesData.map(m => {
+    const icon  = ICONS[m.type] || '·';
+    const color = m.school_color || '#c9a227';
+    const date  = formatDateLabel(m.occurred_at.slice(0, 10));
+    return `
+      <div class="milestone-row">
+        <div class="milestone-icon" style="color:${color};">${icon}</div>
+        <div class="milestone-body">
+          <div class="milestone-desc" style="color:${color};">${escHtml(m.description)}</div>
+          <div class="milestone-date">${date}</div>
+        </div>
+      </div>`;
+  }).join('');
+
+  el.innerHTML = `<div class="milestone-list">${rows}</div>`;
+}
+
 // ── Orrery (radar chart) ──────────────────────────────────────────────────────
 function renderOrrery() {
   const el = document.getElementById('menu-content');
   if (!el) return;
 
   const N   = schools.length;
-  const CX  = 200, CY = 200, R = 110, R_LABEL = 148;
+  const CX  = 150, CY = 150, R = 110;
   const MAX_LV = 30;
 
   const angles = schools.map((_, i) => (i / N) * 2 * Math.PI - Math.PI / 2);
@@ -1029,31 +1080,15 @@ function renderOrrery() {
       class="orrery-dot" style="animation-delay:${delay}s;"/>`;
   }).join('');
 
-  // Labels — placed outside the chart with dy offsets to avoid overlap
-  let labels = schools.map((s, i) => {
-    const a      = angles[i];
-    const sinA   = Math.sin(a);
-    const cosA   = Math.cos(a);
-    const anchor = cosA > 0.3 ? 'start' : cosA < -0.3 ? 'end' : 'middle';
-    const name   = s.name.length > 12 ? s.name.slice(0, 11) + '\u2026' : s.name;
-    const rank   = s.rank || getRank(s.level);
-
-    // Push labels further out; for top/bottom nodes shift horizontally a bit
-    const lx = (CX + R_LABEL * cosA).toFixed(1);
-
-    // Stack two text lines centred on the label point with a fixed 11px gap
-    const gap    = 11;
-    const nameY  = (CY + R_LABEL * sinA - gap * 0.5).toFixed(1);
-    const rankY  = (parseFloat(nameY) + gap).toFixed(1);
-
-    return `
-      <text x="${lx}" y="${nameY}" text-anchor="${anchor}" dominant-baseline="auto"
-        fill="${s.color}" font-family="Cinzel,serif" font-size="9" font-weight="600"
-        letter-spacing="0.5">${name.toUpperCase()}</text>
-      <text x="${lx}" y="${rankY}" text-anchor="${anchor}" dominant-baseline="auto"
-        fill="${rank.color}" font-family="Cinzel,serif" font-size="8">
-        LV${s.level} ${rank.name}</text>`;
-  }).join('');
+  // HTML legend — no SVG text, no overflow issues
+  const legendHtml = `<div class="orrery-legend">${schools.map(s => {
+    const rank = s.rank || getRank(s.level);
+    return `<div class="orrery-legend-item">
+      <span class="orrery-legend-dot" style="background:${s.color};box-shadow:0 0 5px ${s.color}70;"></span>
+      <span class="orrery-legend-name" style="color:${s.color};">${escHtml(s.name)}</span>
+      <span class="orrery-legend-rank" style="color:${rank.color};">LV${s.level} ${rank.name}</span>
+    </div>`;
+  }).join('')}</div>`;
 
   const total  = schools.reduce((a, s) => a + (s.total_xp || 0), 0);
   const avgLv  = schools.length ? Math.round(schools.reduce((a, s) => a + s.level, 0) / schools.length) : 1;
@@ -1062,8 +1097,8 @@ function renderOrrery() {
   el.innerHTML = `
     <div class="orrery-title">THE ORRERY</div>
     <div class="orrery-sub">Constellation of your arcane schools.</div>
-    <svg viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg"
-         style="width:100%;max-width:420px;display:block;margin:0 auto;">
+    <svg viewBox="0 0 300 300" xmlns="http://www.w3.org/2000/svg"
+         style="width:100%;max-width:300px;display:block;margin:0 auto;">
       ${grid}
       ${spokes}
       <polygon points="${dataPts}"
@@ -1073,8 +1108,8 @@ function renderOrrery() {
         class="orrery-polygon"/>
       ${nodes}
       <circle cx="${CX}" cy="${CY}" r="3" fill="rgba(201,162,39,0.4)"/>
-      ${labels}
     </svg>
+    ${legendHtml}
     <div class="orrery-stats">
       <div class="orrery-stat">
         <div class="orrery-stat-label">RANK</div>
