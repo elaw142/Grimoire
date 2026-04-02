@@ -10,6 +10,7 @@ const RANKS        = window.RANKS || [];
 let activeSchoolId = null;
 let pendingVerdict = null;
 let deedLoading    = false;
+let drawerEditMode = false;
 
 // Menu
 let menuOpen = false;
@@ -243,6 +244,7 @@ function closeDrawer() {
   document.body.style.overflow = '';
   activeSchoolId = null;
   pendingVerdict = null;
+  drawerEditMode = false;
 }
 
 async function deleteSchool(schoolId) {
@@ -275,6 +277,7 @@ async function banishSelectedSchool() {
 }
 
 function renderDrawer() {
+  if (drawerEditMode) { renderDrawerEdit(); return; }
   const school = getSchool(activeSchoolId);
   if (!school) return;
   const rank   = school.rank || getRank(school.level);
@@ -334,6 +337,7 @@ function renderDrawer() {
         ${school.flavour ? `<div class="drawer-flavour">${escHtml(school.flavour)}</div>` : ''}
       </div>
       <div class="drawer-header-actions">
+        <button class="drawer-edit-btn" onclick="enterDrawerEditMode()" aria-label="Edit">&#9998;</button>
         <button class="drawer-close" onclick="closeDrawer()" aria-label="Close">&times;</button>
       </div>
     </div>
@@ -351,6 +355,141 @@ function renderDrawer() {
     const inp = document.getElementById('deed-input');
     if (inp) inp.focus();
   }
+}
+
+// ── Drawer edit mode ──────────────────────────────────────────────────────────
+
+function enterDrawerEditMode() {
+  drawerEditMode = true;
+  renderDrawer();
+}
+
+function exitDrawerEditMode() {
+  drawerEditMode = false;
+  renderDrawer();
+}
+
+function renderDrawerEdit() {
+  const school = getSchool(activeSchoolId);
+  if (!school) return;
+  const rank = school.rank || getRank(school.level);
+
+  const spellRows = (school.spells || []).map(sp => `
+    <div class="edit-spell-row" id="edit-spell-${sp.id}">
+      <div style="display:flex;gap:6px;margin-bottom:4px;align-items:center;">
+        <input class="field-input" id="esp-name-${sp.id}" value="${escHtml(sp.name)}" maxlength="80"
+               placeholder="Incantation name" style="flex:1;font-size:13px;padding:6px 8px;">
+        <input type="number" class="field-input" id="esp-xp-${sp.id}" value="${sp.xp}" min="10" max="50"
+               style="width:52px;font-size:13px;padding:6px 8px;text-align:center;">
+        <button class="drawer-edit-btn" style="font-size:16px;" onclick="saveSpellEdit(${sp.id})" title="Save">&#10003;</button>
+        <button class="drawer-edit-btn" style="font-size:14px;color:#9a4a4a;" onclick="deleteSpell(${sp.id})" title="Delete">&#10005;</button>
+      </div>
+      <input class="field-input" id="esp-desc-${sp.id}" value="${escHtml(sp.description)}" maxlength="120"
+             placeholder="Plain description — e.g. Walk 8,000 steps" style="width:100%;font-size:13px;padding:6px 8px;">
+    </div>`
+  ).join('');
+
+  document.getElementById('drawer-content').innerHTML = `
+    <div class="drawer-header" style="flex-direction:column;align-items:stretch;gap:8px;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div class="rank-badge"
+             style="color:${rank.color};border-color:${rank.color}80;background:${rank.color}15;flex-shrink:0;">
+          ${rank.name}
+        </div>
+        <input class="field-input" id="edit-school-name" value="${escHtml(school.name)}" maxlength="50"
+               style="flex:1;font-family:'Cinzel',serif;font-size:15px;color:#c9a227;padding:6px 10px;">
+        <button class="drawer-close" onclick="closeDrawer()" aria-label="Close">&times;</button>
+      </div>
+      <textarea class="oracle-input" id="edit-school-flavour" rows="2" maxlength="300"
+                style="width:100%;">${escHtml(school.flavour)}</textarea>
+      <div style="display:flex;justify-content:flex-end;">
+        <button class="oracle-submit" onclick="saveSchoolEdit()">SAVE</button>
+      </div>
+    </div>
+    <div class="divider" style="margin:12px 0;"></div>
+    <div class="oracle-section-label" style="margin-bottom:10px;">INCANTATIONS</div>
+    <div id="edit-spell-list">${spellRows}</div>
+    <div id="add-spell-area" style="margin-top:10px;">
+      <div id="add-spell-collapsed" style="display:flex;justify-content:center;">
+        <button class="consult-btn" style="letter-spacing:2px;" onclick="showAddSpellForm()">+ ADD INCANTATION</button>
+      </div>
+      <div id="add-spell-form" style="display:none;">
+        <div style="display:flex;gap:6px;margin-bottom:4px;align-items:center;">
+          <input class="field-input" id="new-spell-name" maxlength="80" placeholder="Incantation name"
+                 style="flex:1;font-size:13px;padding:6px 8px;">
+          <input type="number" class="field-input" id="new-spell-xp" value="20" min="10" max="50"
+                 style="width:52px;font-size:13px;padding:6px 8px;text-align:center;">
+        </div>
+        <input class="field-input" id="new-spell-desc" maxlength="120"
+               placeholder="Plain description — e.g. Walk 8,000 steps"
+               style="width:100%;font-size:13px;padding:6px 8px;margin-bottom:8px;">
+        <div style="display:flex;justify-content:flex-end;gap:8px;">
+          <button class="consult-btn" onclick="hideAddSpellForm()">CANCEL</button>
+          <button class="oracle-submit" onclick="addSpell()">ADD</button>
+        </div>
+      </div>
+    </div>
+    <div class="divider" style="margin:14px 0;"></div>
+    <div style="display:flex;justify-content:flex-end;">
+      <button class="consult-btn" onclick="exitDrawerEditMode()">DONE</button>
+    </div>`;
+}
+
+function showAddSpellForm() {
+  document.getElementById('add-spell-collapsed').style.display = 'none';
+  document.getElementById('add-spell-form').style.display = '';
+  document.getElementById('new-spell-name').focus();
+}
+
+function hideAddSpellForm() {
+  document.getElementById('add-spell-collapsed').style.display = '';
+  document.getElementById('add-spell-form').style.display = 'none';
+}
+
+async function saveSchoolEdit() {
+  const name    = (document.getElementById('edit-school-name').value || '').trim();
+  const flavour = (document.getElementById('edit-school-flavour').value || '').trim();
+  if (!name) return;
+  const result = await apiFetch(`/api/school/${activeSchoolId}`, { name, flavour }, 'PUT');
+  if (result.error) { showError(result.error); return; }
+  const school = getSchool(activeSchoolId);
+  if (school) { school.name = result.name; school.flavour = result.flavour; }
+  renderDrawerEdit();
+  if (typeof renderOrrery === 'function') renderOrrery();
+}
+
+async function saveSpellEdit(spellId) {
+  const name = (document.getElementById(`esp-name-${spellId}`).value || '').trim();
+  const desc = (document.getElementById(`esp-desc-${spellId}`).value || '').trim();
+  const xp   = Math.max(10, Math.min(50, parseInt(document.getElementById(`esp-xp-${spellId}`).value, 10) || 20));
+  if (!name) return;
+  const result = await apiFetch(`/api/spell/${spellId}`, { name, description: desc, xp }, 'PUT');
+  if (result.error) { showError(result.error); return; }
+  const school = getSchool(activeSchoolId);
+  if (school) {
+    const sp = school.spells.find(s => s.id === spellId);
+    if (sp) { sp.name = result.name; sp.description = result.description; sp.xp = result.xp; }
+  }
+}
+
+async function deleteSpell(spellId) {
+  const result = await apiFetch(`/api/spell/${spellId}`, {}, 'DELETE');
+  if (result.error) { showError(result.error); return; }
+  const school = getSchool(activeSchoolId);
+  if (school) school.spells = school.spells.filter(s => s.id !== spellId);
+  renderDrawerEdit();
+}
+
+async function addSpell() {
+  const name = (document.getElementById('new-spell-name').value || '').trim();
+  const desc = (document.getElementById('new-spell-desc').value || '').trim();
+  const xp   = Math.max(10, Math.min(50, parseInt(document.getElementById('new-spell-xp').value, 10) || 20));
+  if (!name) return;
+  const result = await apiFetch(`/api/school/${activeSchoolId}/spell`, { name, description: desc, xp });
+  if (result.error) { showError(result.error); return; }
+  const school = getSchool(activeSchoolId);
+  if (school) school.spells.push(result);
+  renderDrawerEdit();
 }
 
 // ── Cast preset spell ─────────────────────────────────────────────────────────

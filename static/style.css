@@ -572,6 +572,20 @@ a:hover { color: #e8d5a8; }
 
 .drawer-close:hover { color: #8a7050; }
 
+.drawer-edit-btn {
+  background: none;
+  border: none;
+  color: #7a6a50;
+  font-size: 18px;
+  line-height: 1;
+  padding: 4px 6px;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+.drawer-edit-btn:hover { color: #c9a227; }
+
+.edit-spell-row { margin-bottom: 12px; }
+
 .drawer-header-actions { display: flex; align-items: center; gap: 4px; margin-left: auto; }
 
 .banish-school-btn {

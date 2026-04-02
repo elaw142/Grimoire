@@ -853,6 +853,90 @@ def api_delete_school(school_id):
     return jsonify({'ok': True})
 
 
+# ── Edit school / spells ─────────────────────────────────────────────────────
+
+@app.route('/api/school/<int:school_id>', methods=['PUT'])
+@require_login_api
+def api_school_edit(school_id):
+    user_id = session['user_id']
+    data = request.get_json()
+    name = (data.get('name') or '').strip()[:50]
+    flavour = (data.get('flavour') or '').strip()[:300]
+    if not name:
+        return jsonify({'error': 'Name required'}), 400
+    db = get_db()
+    school = db.execute(
+        'SELECT * FROM schools WHERE id=? AND user_id=?', (school_id, user_id)
+    ).fetchone()
+    if not school:
+        return jsonify({'error': 'Not found'}), 404
+    db.execute('UPDATE schools SET name=?, flavour=? WHERE id=?', (name, flavour, school_id))
+    db.commit()
+    return jsonify({'id': school_id, 'name': name, 'flavour': flavour})
+
+
+@app.route('/api/school/<int:school_id>/spell', methods=['POST'])
+@require_login_api
+def api_spell_add(school_id):
+    user_id = session['user_id']
+    data = request.get_json()
+    name = (data.get('name') or '').strip()[:80]
+    description = (data.get('description') or '').strip()[:120]
+    xp = max(10, min(50, int(data.get('xp') or 20)))
+    if not name:
+        return jsonify({'error': 'Name required'}), 400
+    db = get_db()
+    school = db.execute(
+        'SELECT * FROM schools WHERE id=? AND user_id=?', (school_id, user_id)
+    ).fetchone()
+    if not school:
+        return jsonify({'error': 'Not found'}), 404
+    cur = db.execute(
+        'INSERT INTO spells (school_id, name, description, xp) VALUES (?,?,?,?)',
+        (school_id, name, description, xp),
+    )
+    db.commit()
+    return jsonify({'id': cur.lastrowid, 'name': name, 'description': description, 'xp': xp, 'school_id': school_id})
+
+
+@app.route('/api/spell/<int:spell_id>', methods=['PUT'])
+@require_login_api
+def api_spell_edit(spell_id):
+    user_id = session['user_id']
+    data = request.get_json()
+    name = (data.get('name') or '').strip()[:80]
+    description = (data.get('description') or '').strip()[:120]
+    xp = max(10, min(50, int(data.get('xp') or 20)))
+    if not name:
+        return jsonify({'error': 'Name required'}), 400
+    db = get_db()
+    spell = db.execute(
+        'SELECT sp.* FROM spells sp JOIN schools sc ON sp.school_id=sc.id '
+        'WHERE sp.id=? AND sc.user_id=?', (spell_id, user_id)
+    ).fetchone()
+    if not spell:
+        return jsonify({'error': 'Not found'}), 404
+    db.execute('UPDATE spells SET name=?, description=?, xp=? WHERE id=?', (name, description, xp, spell_id))
+    db.commit()
+    return jsonify({'id': spell_id, 'name': name, 'description': description, 'xp': xp})
+
+
+@app.route('/api/spell/<int:spell_id>', methods=['DELETE'])
+@require_login_api
+def api_spell_delete(spell_id):
+    user_id = session['user_id']
+    db = get_db()
+    spell = db.execute(
+        'SELECT sp.* FROM spells sp JOIN schools sc ON sp.school_id=sc.id '
+        'WHERE sp.id=? AND sc.user_id=?', (spell_id, user_id)
+    ).fetchone()
+    if not spell:
+        return jsonify({'error': 'Not found'}), 404
+    db.execute('DELETE FROM spells WHERE id=?', (spell_id,))
+    db.commit()
+    return jsonify({'ok': True})
+
+
 # ── Init & run ────────────────────────────────────────────────────────────────
 
 init_db()
