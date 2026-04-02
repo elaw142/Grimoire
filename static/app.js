@@ -18,6 +18,7 @@ let menuTab  = 'chronicle';
 
 // Augur tab state
 let augurState = {
+  mode:           null,    // null | 'recalibrate' | 'discover'
   recalLoading:   false,
   recalResult:    null,   // { schoolName, spells }
   discoverStage:  'input', // 'input' | 'loading' | 'preview'
@@ -800,16 +801,49 @@ function renderOrrery() {
     </div>`;
 }
 
+const AUGUR_MODE_LABELS = {
+  recalibrate: 'Reforge a School',
+  discover:    'Discover a New School',
+};
+
 // ── Augur tab ─────────────────────────────────────────────────────────────────
 function renderAugurTab() {
   const el = document.getElementById('menu-content');
   if (!el) return;
+
+  const { mode } = augurState;
+
+  const modeOptions = [
+    `<option value="" ${!mode ? 'selected' : ''}>— Choose your purpose —</option>`,
+    `<option value="recalibrate" ${mode === 'recalibrate' ? 'selected' : ''}>Reforge a School</option>`,
+    `<option value="discover"    ${mode === 'discover'    ? 'selected' : ''}>Discover a New School</option>`,
+  ].join('');
+
+  const sectionHtml = mode === 'recalibrate' ? renderRecalibrateSection()
+                    : mode === 'discover'    ? renderDiscoverSection()
+                    : '';
+
   el.innerHTML = `
     <div class="augur-panel-title">THE AUGUR'S CHAMBER</div>
     <div class="augur-panel-sub">Seek counsel. Forge new paths.</div>
-    ${renderRecalibrateSection()}
-    ${renderDiscoverSection()}`;
-  updateRecalBanish();
+    <div class="augur-section" style="padding-bottom:0;">
+      <select class="school-select" onchange="selectAugurMode(this.value)" style="margin-bottom:0;">
+        ${modeOptions}
+      </select>
+    </div>
+    ${sectionHtml}`;
+
+  if (mode === 'recalibrate') updateRecalBanish();
+}
+
+function selectAugurMode(val) {
+  augurState.mode = val || null;
+  // Reset sub-state when switching modes
+  augurState.recalResult   = null;
+  augurState.recalLoading  = false;
+  augurState.discoverStage = 'input';
+  augurState.discoverPreview = null;
+  renderAugurTab();
 }
 
 function renderRecalibrateSection() {
@@ -878,12 +912,13 @@ function renderDiscoverSection() {
   const st = augurState;
 
   if (st.discoverStage === 'loading') {
+    setTimeout(() => startRecalFlavour('augur-discover-flavour'), 0);
     return `
       <div class="augur-section">
         <div class="augur-section-title">DISCOVER A NEW SCHOOL</div>
         <div style="text-align:center;padding:24px 0;">
           <div class="ai-spinner" style="width:18px;height:18px;border-width:2px;margin:0 auto 12px;"></div>
-          <div style="font-family:'Cinzel',serif;font-size:10px;letter-spacing:3px;color:#7a6a50;">
+          <div id="augur-discover-flavour" class="recal-flavour-text" style="font-family:'Cinzel',serif;font-size:10px;letter-spacing:2px;color:#7a6a50;">
             THE AUGUR DIVINES&hellip;
           </div>
         </div>
@@ -995,6 +1030,7 @@ async function doAugurDiscover() {
   renderAugurTab();
 
   const result = await apiFetch('/api/augur/school', { description: desc });
+  stopRecalFlavour();
 
   if (result.error || !result.name) {
     augurState.discoverStage = 'input';
