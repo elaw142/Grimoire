@@ -826,8 +826,8 @@ function renderAugurTab() {
   el.innerHTML = `
     <div class="augur-panel-title">THE AUGUR'S CHAMBER</div>
     <div class="augur-panel-sub">Seek counsel. Forge new paths.</div>
-    <div class="augur-section" style="padding-bottom:0;">
-      <select class="school-select" onchange="selectAugurMode(this.value)" style="margin-bottom:0;">
+    <div class="augur-section">
+      <select class="school-select" onchange="selectAugurMode(this.value)">
         ${modeOptions}
       </select>
     </div>
