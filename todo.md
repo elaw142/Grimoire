@@ -15,7 +15,7 @@
 
 ### 2. Rework Tasks / Spells Philosophy
 - Core focus should be **consistent daily habits** (these are the primary spells)
-- **Infrequent / one-off tasks** should be submitted through the Augur (custom deed) with an **inverse XP bias on frequency** — the more often a deed is submitted, the less XP it awards
+- **Infrequent / one-off tasks** should be submitted through the Augur (custom deed)
 - This shifts the system away from grinding and toward genuine habit building
 
 ---
