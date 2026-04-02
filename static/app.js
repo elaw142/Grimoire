@@ -922,8 +922,9 @@ if (document.getElementById('header-ai-title')?.querySelector('.hstat-pending'))
   refreshAITitle();
 }
 
-// Warm up the AI model in the background so the first real call isn't cold
+// Warm up the AI model on load and keep it alive with a heartbeat every 4 minutes
 apiFetch('/api/augur/warmup', {});
+setInterval(() => apiFetch('/api/augur/warmup', {}), 4 * 60 * 1000);
 
 // ── Keyboard shortcuts ────────────────────────────────────────────────────────
 document.addEventListener('keydown', e => {

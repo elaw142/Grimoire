@@ -808,13 +808,14 @@ def compute_title(schools):
 @app.route('/api/augur/warmup', methods=['POST'])
 @require_login_api
 def api_augur_warmup():
-    """Fire a minimal prompt to load the model into memory. Response is ignored."""
+    """Fire a minimal prompt to keep the model loaded in memory indefinitely."""
     try:
         requests.post(OLLAMA_URL, json={
             'model': OLLAMA_MODEL,
             'prompt': 'Reply with valid JSON: {"ok":true}',
             'stream': False,
             'format': 'json',
+            'keep_alive': -1,
             'options': {'num_predict': 8},
         }, timeout=120)
     except Exception as e:
