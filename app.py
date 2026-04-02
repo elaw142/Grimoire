@@ -506,7 +506,7 @@ SCHOOL_HABIT_EXAMPLES = {
 }
 
 
-def _generate_recal_spells(school, level, context, db, user_id):
+def _generate_recal_spells(school, context, db, user_id):
     """Generate recalibrated spells via AI. Returns list of spell dicts or None on failure."""
     school_id = school['id']
     deed_rows = db.execute(
@@ -527,29 +527,25 @@ def _generate_recal_spells(school, level, context, db, user_id):
         'You are the Augur — a dark fantasy sage calibrating a hero\'s training regimen. '
         'Return ONLY valid JSON: {"spells":[{"name":"string","description":"string","xp":number}]}. '
         '4-5 spells. '
-        'RULE 1 — every spell must be a habit from the school\'s domain. '
-        'Do NOT generate habits from other domains. '
-        'RULE 2 — "description" is a SIMPLE, MUNDANE, real-world daily task. Never fantasy-flavoured. '
-        'BAD descriptions (never do this): "Commune with spirits", "Forge your will in shadow", "Seek visions in the abyss". '
-        'RULE 3 — "name" is a short fantasy incantation title wrapping the real-world task. This is the ONLY fantasy-flavoured part. '
-        'Mix two styles: (A) Latin/mystical words (e.g. "Somnium", "Hydor", "Ignis Vitae"). '
-        '(B) Fantasy patterns (e.g. "Hex of Fortitude", "Rite of Iron", "Oath of Clarity"). '
-        'Scale name intensity by level — '
-        'Levels 1-9: simple — "Rest Rite", "Somnium", "Iron Oath". '
-        'Levels 10-19: dramatic — "Rite of the Iron Body", "Vigil of Clarity". '
-        'Levels 20-29: dark — "Oath of the Undying Flame", "Cibus Sanctus Eternum". '
-        'Levels 30+: legendary — "The Eternal Vigil of Ash and Marrow". '
+        'RULE 1 — every spell must be a concrete, repeatable daily habit from the school\'s literal real-world domain. '
+        'Do NOT invent tasks from the school\'s fantasy name, aesthetic, or flavour. '
+        'A climbing school generates climbing and fitness habits. A cooking school generates cooking habits. Never cave imagery, never shadow metaphors. '
+        'RULE 2 — "description" is ONE plain sentence: action + specific target. No fantasy language, no fluff. '
+        'GOOD: "Walk 8,000 steps", "Do 20 push-ups", "Cook a meal from scratch", "Read for 30 minutes". '
+        'BAD: "Commune with spirits", "Forge your will in shadow", "Seek visions in the abyss". '
+        'RULE 3 — "name" is a short fantasy incantation title (2-4 words) wrapping the real-world task. This is the ONLY fantasy part. '
+        'Mix: (A) Latin/mystical (e.g. "Somnium", "Hydor", "Ignis Vitae") or (B) fantasy patterns (e.g. "Hex of Fortitude", "Rite of Iron"). '
         'XP 10-50 scaled to effort. No markdown, no extra keys.'
     )
     user_msg = (
         f'SCHOOL: {school["name"].upper()}\n'
         f'Domain: {school["flavour"]}\n'
         f'Example habits for this school: {domain_examples}\n'
-        f'Level {level}. Recent acts: {summary}.\n'
+        f'Recent acts: {summary}.\n'
     )
     if context:
         user_msg += f'Seeker\'s guidance: "{context}"\n'
-    user_msg += 'Harder demands at higher levels; reduce XP for overused habits; introduce fresh challenges.'
+    user_msg += 'Vary habits to avoid repeating overused ones.'
 
     result = call_augur(system, user_msg, num_predict=550, temperature=0.4)
     if not result or 'spells' not in result or not result['spells']:
@@ -599,13 +595,9 @@ def api_augur_recalibrate():
     if not school:
         return jsonify({'error': 'Not found'}), 404
 
-    xp_row = db.execute(
-        'SELECT xp FROM user_xp WHERE user_id=? AND school_id=?', (user_id, school_id)
-    ).fetchone()
-    level = get_level(xp_row['xp'] if xp_row else 0)
     context = data.get('context', '').strip()
 
-    spells = _generate_recal_spells(dict(school), level, context, db, user_id)
+    spells = _generate_recal_spells(dict(school), context, db, user_id)
     if not spells:
         return jsonify({'error': 'The Augur could not recalibrate at this time.'}), 503
 
@@ -649,12 +641,14 @@ def api_augur_school():
         'You are the Augur — a dark fantasy sage who names and defines schools of arcane practice. '
         'Return ONLY valid JSON: {"name":"string","flavour":"string","spells":[{"name":"string","description":"string","xp":number}]}. '
         'School name: 1-2 evocative dark fantasy words (e.g. Umbramancy, Ironveil, Sanguine). '
-        'Flavour: 1-2 atmospheric sentences describing the school. '
+        'Flavour: 1 concise sentence describing the school\'s domain. No purple prose. '
         '4-5 spells. For each spell: '
-        'STEP 1 — "description": a concrete real-world habit relevant to this pursuit (e.g. "Cook a new recipe", "Practice knife skills for 20 minutes"). Must be specific and actionable. '
-        'STEP 2 — "name": a short fantasy incantation title wrapping that task (2-3 words, simple since level 1). '
-        'Mix two styles: (A) Latin/mystical words (e.g. "Somnium", "Ignis", "Cibus Rite") and (B) generic fantasy patterns (e.g. "Hex of X", "Oath of X", "X Vigil"). '
-        'XP 10-50. No markdown, no extra keys.'
+        'RULE 1 — "description" is ONE plain sentence: action + specific target, grounded in the literal real-world pursuit. '
+        'GOOD: "Cook a meal from scratch", "Practice knife skills for 20 minutes", "Walk 8,000 steps". '
+        'BAD: "Commune with the flame", "Forge your will in shadow". '
+        'RULE 2 — "name" is a short fantasy incantation title (2-4 words) wrapping the real-world task. This is the ONLY fantasy part. '
+        'Mix: (A) Latin/mystical (e.g. "Somnium", "Ignis", "Cibus Rite") or (B) fantasy patterns (e.g. "Hex of X", "Oath of X"). '
+        'XP 10-50 scaled to effort. No markdown, no extra keys.'
     )
     user_msg = f'The seeker wishes to cultivate: "{description}"\nCreate a school of magic for this pursuit.'
 

@@ -165,7 +165,6 @@ async function applyXPResult(result) {
     showBanner(school, result.level, result.rank);
   }
   if (result.rank_changed) {
-    await triggerRecalibrate(school.id);
     refreshAITitle();
   }
 }
@@ -294,10 +293,11 @@ function renderDrawer() {
   let oracleSection = '';
   if (!pendingVerdict) {
     oracleSection = `
-      <div class="oracle-section-label">OFFER A CUSTOM ACT TO THE AUGUR</div>
+      <div class="oracle-section-label">PRESENT A DEED BEFORE THE AUGUR</div>
+      <div class="oracle-section-sub" style="font-family:'Cinzel',serif;font-size:9px;letter-spacing:2px;color:#7a6a50;margin-bottom:10px;">FOR ACTS THAT LIE BEYOND THY DAILY RITES</div>
       <div class="oracle-row">
         <textarea class="oracle-input" id="deed-input" rows="2"
-          placeholder="Describe your act\u2026 e.g. \u2018I ran 12km in the rain\u2019"
+          placeholder="Declare thy act\u2026 e.g. \u2018I ran 12km in the rain\u2019"
           ${deedLoading ? 'disabled' : ''}
           onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();submitDeed();}"></textarea>
         <button class="oracle-submit" onclick="submitDeed()" ${deedLoading ? 'disabled' : ''}>
