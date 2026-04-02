@@ -36,11 +36,11 @@ DEFAULT_SCHOOLS = [
         'flavour': 'The art of mending flesh and spirit — through nourishment, water, and sacred sleep.',
         'color': '#8b7fd4',
         'spells': [
-            {'name': 'Slept 7\u20139 hours', 'xp': 30},
-            {'name': 'Consistent sleep schedule', 'xp': 25},
-            {'name': 'Drank 2L+ of water', 'xp': 25},
-            {'name': 'Ate fruits or vegetables', 'xp': 20},
-            {'name': 'Cooked a healthy meal', 'xp': 25},
+            {'name': 'Somnium',      'description': 'Slept 7–9 hours',              'xp': 30},
+            {'name': 'Vigil Sanus',  'description': 'Kept a consistent sleep schedule', 'xp': 25},
+            {'name': 'Hydor',        'description': 'Drank 2L of water',             'xp': 25},
+            {'name': 'Cibus Vitae',  'description': 'Ate fruits or vegetables',       'xp': 20},
+            {'name': 'Hearth Oath',  'description': 'Cooked a healthy meal',          'xp': 25},
         ],
     },
     {
@@ -48,10 +48,10 @@ DEFAULT_SCHOOLS = [
         'flavour': 'To reshape the body is to defy entropy. Pain is the price; transformation, the reward.',
         'color': '#c9a227',
         'spells': [
-            {'name': 'Full workout session', 'xp': 35},
-            {'name': 'Went for a run', 'xp': 25},
-            {'name': 'Walked 8,000+ steps', 'xp': 20},
-            {'name': 'Stretched or did yoga', 'xp': 15},
+            {'name': 'Rite of Iron',  'description': 'Completed a full workout',   'xp': 35},
+            {'name': 'Swift Hex',     'description': 'Went for a run',             'xp': 25},
+            {'name': 'Iter Fortis',   'description': 'Walked 8,000+ steps',        'xp': 20},
+            {'name': 'Flexus',        'description': 'Stretched or did yoga',       'xp': 15},
         ],
     },
     {
@@ -59,10 +59,10 @@ DEFAULT_SCHOOLS = [
         'flavour': 'The mind is a mirror; left unpolished, it shows only shadow. Tend it with discipline.',
         'color': '#52b788',
         'spells': [
-            {'name': 'Meditated', 'xp': 25},
-            {'name': 'Journaled', 'xp': 20},
-            {'name': 'Spent time in nature', 'xp': 20},
-            {'name': 'Practiced gratitude', 'xp': 15},
+            {'name': 'Silentium',     'description': 'Meditated for 10+ minutes',  'xp': 25},
+            {'name': 'Ink Rite',      'description': 'Journaled',                  'xp': 20},
+            {'name': 'Natura Vigil',  'description': 'Spent time in nature',       'xp': 20},
+            {'name': 'Gratia',        'description': 'Practised gratitude',         'xp': 15},
         ],
     },
     {
@@ -70,10 +70,10 @@ DEFAULT_SCHOOLS = [
         'flavour': 'Craft and knowledge are power made manifest. Every completed work is a rune carved into the world.',
         'color': '#74b9e0',
         'spells': [
-            {'name': 'Deep work session (1h+)', 'xp': 30},
-            {'name': 'Read for 20+ min', 'xp': 20},
-            {'name': 'Learned something new', 'xp': 25},
-            {'name': 'Completed a key task', 'xp': 20},
+            {'name': 'Deep Vigil',  'description': 'Completed a 1h+ deep work session', 'xp': 30},
+            {'name': 'Lexis',       'description': 'Read for 20+ minutes',               'xp': 20},
+            {'name': 'Nova Runa',   'description': 'Learned something new',               'xp': 25},
+            {'name': 'Opus',        'description': 'Completed a key task',                'xp': 20},
         ],
     },
     {
@@ -81,10 +81,10 @@ DEFAULT_SCHOOLS = [
         'flavour': 'The subtle art of binding souls \u2014 through word, deed, and genuine presence.',
         'color': '#d98fb0',
         'spells': [
-            {'name': 'Meaningful conversation', 'xp': 25},
-            {'name': 'Reached out to someone', 'xp': 20},
-            {'name': 'Quality time with others', 'xp': 25},
-            {'name': 'Did something kind', 'xp': 15},
+            {'name': 'Binding Rite',  'description': 'Had a meaningful conversation',     'xp': 25},
+            {'name': 'Tendrils Hex',  'description': 'Reached out to someone',            'xp': 20},
+            {'name': 'Communion',     'description': 'Spent quality time with others',    'xp': 25},
+            {'name': 'Kind Oath',     'description': 'Did something kind for someone',    'xp': 15},
         ],
     },
 ]
@@ -262,8 +262,8 @@ def provision_user_schools(user_id, db):
         school_id = cur.lastrowid
         for sp in sd['spells']:
             db.execute(
-                'INSERT INTO spells (school_id, name, xp) VALUES (?,?,?)',
-                (school_id, sp['name'], sp['xp']),
+                'INSERT INTO spells (school_id, name, description, xp) VALUES (?,?,?,?)',
+                (school_id, sp['name'], sp.get('description', ''), sp['xp']),
             )
         db.execute(
             'INSERT INTO user_xp (user_id, school_id, xp) VALUES (?,?,0)',
