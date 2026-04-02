@@ -1439,24 +1439,77 @@ a:hover { color: #e8d5a8; }
   line-height: 1.5;
 }
 
-.school-select {
+.csel-wrapper {
+  position: relative;
   width: 100%;
-  background: rgba(0,0,0,0.35) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23c9a227' fill-opacity='0.6'/%3E%3C/svg%3E") no-repeat right 12px center;
-  border: 1px solid rgba(201,162,39,0.2);
-  border-radius: 3px;
-  padding: 10px 34px 10px 12px;
-  color: #cfc0a0;
-  font-family: 'Crimson Text', Georgia, serif;
-  font-size: 15px;
-  outline: none;
-  cursor: pointer;
   margin-bottom: 10px;
-  -webkit-appearance: none;
-  appearance: none;
+  outline: none;
 }
 
-.school-select:focus { border-color: rgba(201,162,39,0.5); }
-.school-select option { background: #100e0a; color: #cfc0a0; }
+.csel-display {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: rgba(0,0,0,0.35);
+  border: 1px solid rgba(201,162,39,0.2);
+  border-radius: 3px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+  user-select: none;
+}
+
+.csel-wrapper:focus .csel-display,
+.csel-wrapper.open .csel-display {
+  border-color: rgba(201,162,39,0.5);
+}
+
+.csel-label {
+  font-family: 'Cinzel', serif;
+  font-size: 12px;
+  letter-spacing: 1px;
+  color: #cfc0a0;
+}
+
+.csel-arrow {
+  width: 10px;
+  height: 6px;
+  color: rgba(201,162,39,0.6);
+  flex-shrink: 0;
+  transition: transform 0.15s;
+}
+
+.csel-wrapper.open .csel-arrow { transform: rotate(180deg); }
+
+.csel-options {
+  display: none;
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0; right: 0;
+  background: #1a1510;
+  border: 1px solid rgba(201,162,39,0.25);
+  border-radius: 3px;
+  z-index: 300;
+  overflow: hidden;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.6);
+}
+
+.csel-wrapper.open .csel-options { display: block; }
+
+.csel-option {
+  padding: 10px 12px;
+  font-family: 'Cinzel', serif;
+  font-size: 12px;
+  letter-spacing: 1px;
+  color: #9a8a6a;
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+  border-bottom: 1px solid rgba(201,162,39,0.06);
+}
+
+.csel-option:last-child { border-bottom: none; }
+.csel-option:hover  { background: rgba(201,162,39,0.08); color: #cfc0a0; }
+.csel-option.active { color: #c9a227; background: rgba(201,162,39,0.05); }
 
 .augur-result {
   border: 1px solid rgba(201,162,39,0.2);

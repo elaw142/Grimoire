@@ -96,6 +96,81 @@ function escHtml(str) {
     .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
+// ── Custom select component ───────────────────────────────────────────────────
+// Renders a themed dropdown. `options` = [{value, label}], `selectedValue` = current value.
+// `onChangeFn` is a string of JS to call with the new value, e.g. "selectAugurMode"
+function customSelect(id, options, selectedValue, onChangeFn) {
+  const sel = options.find(o => String(o.value) === String(selectedValue)) || options[0];
+  const label = sel ? sel.label : '— Select —';
+  const optionsHtml = options.map(o => `
+    <div class="csel-option ${String(o.value) === String(selectedValue) ? 'active' : ''}"
+         data-value="${escHtml(String(o.value))}"
+         onclick="pickCustomSelect('${id}','${escHtml(String(o.value))}','${onChangeFn}')">
+      ${escHtml(o.label)}
+    </div>`).join('');
+  return `
+    <div class="csel-wrapper" id="csel-${id}" tabindex="0"
+         onkeydown="cselKeydown(event,'${id}','${onChangeFn}')"
+         onclick="toggleCustomSelect('${id}')">
+      <input type="hidden" id="${id}" value="${escHtml(String(selectedValue || ''))}">
+      <div class="csel-display">
+        <span class="csel-label">${escHtml(label)}</span>
+        <svg class="csel-arrow" viewBox="0 0 10 6" xmlns="http://www.w3.org/2000/svg">
+          <path d="M0 0l5 6 5-6z" fill="currentColor"/>
+        </svg>
+      </div>
+      <div class="csel-options" id="csel-opts-${id}">${optionsHtml}</div>
+    </div>`;
+}
+
+function toggleCustomSelect(id) {
+  const wrapper = document.getElementById(`csel-${id}`);
+  const opts    = document.getElementById(`csel-opts-${id}`);
+  if (!wrapper || !opts) return;
+  const isOpen = wrapper.classList.contains('open');
+  // Close all other open selects first
+  document.querySelectorAll('.csel-wrapper.open').forEach(el => el.classList.remove('open'));
+  if (!isOpen) {
+    wrapper.classList.add('open');
+    // Close on outside click
+    setTimeout(() => document.addEventListener('click', function handler(e) {
+      if (!wrapper.contains(e.target)) {
+        wrapper.classList.remove('open');
+        document.removeEventListener('click', handler);
+      }
+    }), 0);
+  }
+}
+
+function pickCustomSelect(id, value, onChangeFn) {
+  const input   = document.getElementById(id);
+  const wrapper = document.getElementById(`csel-${id}`);
+  if (!input || !wrapper) return;
+  input.value = value;
+  wrapper.classList.remove('open');
+  // Update label
+  const label = wrapper.querySelector('.csel-label');
+  const active = wrapper.querySelector(`.csel-option[data-value="${CSS.escape(value)}"]`);
+  if (label && active) label.textContent = active.textContent.trim();
+  // Mark active option
+  wrapper.querySelectorAll('.csel-option').forEach(el =>
+    el.classList.toggle('active', el.dataset.value === value)
+  );
+  // Fire the callback
+  if (onChangeFn) window[onChangeFn](value);
+}
+
+function cselKeydown(e, id, onChangeFn) {
+  const wrapper = document.getElementById(`csel-${id}`);
+  if (!wrapper) return;
+  const opts = [...wrapper.querySelectorAll('.csel-option')];
+  const cur  = opts.findIndex(o => o.classList.contains('active'));
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleCustomSelect(id); }
+  else if (e.key === 'ArrowDown') { e.preventDefault(); pickCustomSelect(id, opts[Math.min(cur+1, opts.length-1)].dataset.value, onChangeFn); }
+  else if (e.key === 'ArrowUp')   { e.preventDefault(); pickCustomSelect(id, opts[Math.max(cur-1, 0)].dataset.value, onChangeFn); }
+  else if (e.key === 'Escape')    { wrapper.classList.remove('open'); }
+}
+
 // ── Card DOM updates ──────────────────────────────────────────────────────────
 function updateCardDOM(school) {
   const card = document.getElementById(`card-${school.id}`);
@@ -1150,10 +1225,10 @@ function renderAugurTab() {
   const { mode } = augurState;
 
   const modeOptions = [
-    `<option value="" ${!mode ? 'selected' : ''}>— Choose your purpose —</option>`,
-    `<option value="recalibrate" ${mode === 'recalibrate' ? 'selected' : ''}>Reforge a School</option>`,
-    `<option value="discover"    ${mode === 'discover'    ? 'selected' : ''}>Discover a New School</option>`,
-  ].join('');
+    { value: '',             label: '— Choose your purpose —' },
+    { value: 'recalibrate',  label: 'Reforge a School' },
+    { value: 'discover',     label: 'Discover a New School' },
+  ];
 
   const sectionHtml = mode === 'recalibrate' ? renderRecalibrateSection()
                     : mode === 'discover'    ? renderDiscoverSection()
@@ -1163,9 +1238,7 @@ function renderAugurTab() {
     <div class="augur-panel-title">THE AUGUR'S CHAMBER</div>
     <div class="augur-panel-sub">Seek counsel. Forge new paths.</div>
     <div class="augur-section">
-      <select class="school-select" onchange="selectAugurMode(this.value)">
-        ${modeOptions}
-      </select>
+      ${customSelect('augur-mode-select', modeOptions, mode || '', 'selectAugurMode')}
     </div>
     ${sectionHtml}`;
 
@@ -1186,8 +1259,9 @@ function renderRecalibrateSection() {
   const st = augurState;
 
   const schoolOptions = schools.map(s =>
-    `<option value="${s.id}">${escHtml(s.name)} &mdash; LV${s.level}</option>`
-  ).join('');
+    ({ value: String(s.id), label: `${s.name} — LV${s.level}` })
+  );
+  const defaultSchoolId = String(schools[0]?.id || '');
 
   if (st.recalLoading) {
     setTimeout(() => startRecalFlavour('augur-recal-flavour'), 0);
@@ -1233,7 +1307,7 @@ function renderRecalibrateSection() {
       <div class="augur-section-sub">
         The Augur will reforge a school's incantations based on your level, history, and any guidance you provide.
       </div>
-      <select class="school-select" id="recal-school-select" onchange="updateRecalBanish()">${schoolOptions}</select>
+      ${customSelect('recal-school-select', schoolOptions, defaultSchoolId, 'updateRecalBanish')}
       <textarea class="oracle-input" id="recal-context-input" rows="3"
         placeholder="Guidance for the Augur (optional) \u2014 e.g. \u2018I\u2019ve started training for a marathon\u2019"
         style="width:100%;margin-bottom:10px;"></textarea>
