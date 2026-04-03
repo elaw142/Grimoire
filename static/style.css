@@ -1068,17 +1068,11 @@ a:hover { color: #e8d5a8; }
   display: flex;
   flex-direction: column;
   will-change: transform;
-  transform: translateX(0);
+  transform: translateX(100%);
   transition: transform 0.25s cubic-bezier(.4,0,.2,1);
 }
 
-.menu-overlay.opening .menu-panel { animation: slideInRight 0.25s cubic-bezier(.4,0,.2,1) forwards; }
-.menu-overlay.closing .menu-panel { transform: translateX(100%); }
-
-@keyframes slideInRight {
-  from { transform: translateX(100%); }
-  to   { transform: translateX(0); }
-}
+.menu-overlay.open .menu-panel { transform: translateX(0); }
 
 .menu-header {
   display: flex;

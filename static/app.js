@@ -119,7 +119,7 @@ function customSelect(id, options, selectedValue, onChangeFn) {
           <path d="M0 0l5 6 5-6z" fill="currentColor"/>
         </svg>
       </div>
-      <div class="csel-options" id="csel-opts-${id}">${optionsHtml}</div>
+      <div class="csel-options" id="csel-opts-${id}" onclick="event.stopPropagation()">${optionsHtml}</div>
     </div>`;
 }
 
@@ -333,11 +333,10 @@ function closeDrawer() {
   overlay.classList.add('closing');
   document.body.style.overflow = '';
   activeSchoolId = null;
-  overlay.addEventListener('transitionend', function handler() {
+  setTimeout(() => {
     overlay.classList.add('hidden');
     overlay.classList.remove('closing');
-    overlay.removeEventListener('transitionend', handler);
-  }, { once: true });
+  }, 200);
   pendingVerdict = null;
   drawerEditMode = false;
 }
@@ -814,24 +813,24 @@ function openMenu() {
   menuOpen = true;
   const overlay = document.getElementById('menu-overlay');
   overlay.classList.remove('hidden', 'closing');
-  overlay.classList.add('opening');
   document.body.style.overflow = 'hidden';
-  // Render content after first frame so the slide animation isn't blocked by JS work
-  requestAnimationFrame(() => renderMenuContent());
+  // Add .open on next frame so the panel has a translated starting position to animate from
+  requestAnimationFrame(() => {
+    overlay.classList.add('open');
+    renderMenuContent();
+  });
 }
 
 function closeMenu() {
   menuOpen = false;
   const overlay = document.getElementById('menu-overlay');
-  overlay.classList.remove('opening');
+  overlay.classList.remove('open');
   overlay.classList.add('closing');
   document.body.style.overflow = '';
-  // Wait for transition to finish before hiding
-  overlay.addEventListener('transitionend', function handler() {
+  setTimeout(() => {
     overlay.classList.add('hidden');
     overlay.classList.remove('closing');
-    overlay.removeEventListener('transitionend', handler);
-  }, { once: true });
+  }, 260); // slightly longer than the 0.25s panel transition
 }
 
 function setMenuTab(tab) {
