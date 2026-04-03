@@ -321,15 +321,23 @@ function openDrawer(schoolId) {
   activeSchoolId = schoolId;
   pendingVerdict = null;
   deedLoading    = false;
-  renderDrawer();
-  document.getElementById('drawer-overlay').classList.remove('hidden');
+  const overlay = document.getElementById('drawer-overlay');
+  overlay.classList.remove('hidden', 'closing');
   document.body.style.overflow = 'hidden';
+  // Render after showing so the slide animation isn't blocked by innerHTML work
+  requestAnimationFrame(() => renderDrawer());
 }
 
 function closeDrawer() {
-  document.getElementById('drawer-overlay').classList.add('hidden');
+  const overlay = document.getElementById('drawer-overlay');
+  overlay.classList.add('closing');
   document.body.style.overflow = '';
   activeSchoolId = null;
+  overlay.addEventListener('transitionend', function handler() {
+    overlay.classList.add('hidden');
+    overlay.classList.remove('closing');
+    overlay.removeEventListener('transitionend', handler);
+  }, { once: true });
   pendingVerdict = null;
   drawerEditMode = false;
 }
@@ -805,15 +813,25 @@ function dismissRecal() {
 function openMenu() {
   menuOpen = true;
   const overlay = document.getElementById('menu-overlay');
-  overlay.classList.remove('hidden');
+  overlay.classList.remove('hidden', 'closing');
+  overlay.classList.add('opening');
   document.body.style.overflow = 'hidden';
-  renderMenuContent();
+  // Render content after first frame so the slide animation isn't blocked by JS work
+  requestAnimationFrame(() => renderMenuContent());
 }
 
 function closeMenu() {
   menuOpen = false;
-  document.getElementById('menu-overlay').classList.add('hidden');
+  const overlay = document.getElementById('menu-overlay');
+  overlay.classList.remove('opening');
+  overlay.classList.add('closing');
   document.body.style.overflow = '';
+  // Wait for transition to finish before hiding
+  overlay.addEventListener('transitionend', function handler() {
+    overlay.classList.add('hidden');
+    overlay.classList.remove('closing');
+    overlay.removeEventListener('transitionend', handler);
+  }, { once: true });
 }
 
 function setMenuTab(tab) {

@@ -109,7 +109,7 @@ a:hover { color: #e8d5a8; }
   font-size: 12px;
   letter-spacing: 2px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
 }
 
 .auth-submit:hover { background: rgba(201,162,39,0.16); border-color: rgba(201,162,39,0.6); }
@@ -358,7 +358,7 @@ a:hover { color: #e8d5a8; }
   font-size: 11px;
   letter-spacing: 2px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -511,11 +511,14 @@ a:hover { color: #e8d5a8; }
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  backdrop-filter: blur(4px);
-  animation: fadein 0.15s ease;
+  /* backdrop-filter removed — very expensive on non-Mac, causes YouTube quality drop */
+  will-change: opacity;
+  transition: opacity 0.2s ease;
 }
 
-.panel-overlay.hidden { display: none; }
+.panel-overlay.hidden  { display: none; }
+.panel-overlay.closing { opacity: 0; pointer-events: none; }
+.panel-overlay.closing .panel-drawer { transform: translateY(40px); opacity: 0; }
 
 @keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
 
@@ -530,7 +533,9 @@ a:hover { color: #e8d5a8; }
   padding: 22px 20px;
   max-height: 82vh;
   overflow-y: auto;
+  will-change: transform, opacity;
   animation: slideup 0.2s cubic-bezier(.4,0,.2,1);
+  transition: transform 0.18s cubic-bezier(.4,0,.2,1), opacity 0.18s ease;
 }
 
 @keyframes slideup {
@@ -673,7 +678,7 @@ a:hover { color: #e8d5a8; }
   font-family: 'Crimson Text', Georgia, serif;
   font-size: 17px;
   cursor: pointer;
-  transition: all 0.12s;
+  transition: color 0.12s, background 0.12s, border-color 0.12s;
   text-align: left;
   width: 100%;
   display: flex;
@@ -735,7 +740,7 @@ a:hover { color: #e8d5a8; }
   font-size: 12px;
   letter-spacing: 2px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
   white-space: nowrap;
   -webkit-tap-highlight-color: transparent;
 }
@@ -768,7 +773,7 @@ a:hover { color: #e8d5a8; }
   font-size: 10px;
   letter-spacing: 2px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
   display: flex;
   align-items: center;
   gap: 5px;
@@ -1002,7 +1007,7 @@ a:hover { color: #e8d5a8; }
   letter-spacing: 2px;
   padding: 4px 8px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
 }
 
 .reset-btn:hover { border-color: rgba(255,80,60,0.5); color: rgba(255,80,60,0.8); }
@@ -1046,12 +1051,13 @@ a:hover { color: #e8d5a8; }
   inset: 0;
   background: rgba(0,0,0,0.65);
   z-index: 150;
-  backdrop-filter: blur(3px);
-  -webkit-backdrop-filter: blur(3px);
-  animation: fadein 0.15s ease;
+  /* backdrop-filter removed — expensive on non-Mac, causes compositing stutter */
+  will-change: opacity;
+  transition: opacity 0.22s ease;
 }
 
-.menu-overlay.hidden { display: none; }
+.menu-overlay.hidden  { display: none; }
+.menu-overlay.closing { opacity: 0; pointer-events: none; }
 
 .menu-panel {
   position: absolute;
@@ -1061,12 +1067,17 @@ a:hover { color: #e8d5a8; }
   border-left: 1px solid rgba(201,162,39,0.15);
   display: flex;
   flex-direction: column;
-  animation: slideInRight 0.25s cubic-bezier(.4,0,.2,1);
+  will-change: transform;
+  transform: translateX(0);
+  transition: transform 0.25s cubic-bezier(.4,0,.2,1);
 }
+
+.menu-overlay.opening .menu-panel { animation: slideInRight 0.25s cubic-bezier(.4,0,.2,1) forwards; }
+.menu-overlay.closing .menu-panel { transform: translateX(100%); }
 
 @keyframes slideInRight {
   from { transform: translateX(100%); }
-  to   { transform: none; }
+  to   { transform: translateX(0); }
 }
 
 .menu-header {
@@ -1103,7 +1114,7 @@ a:hover { color: #e8d5a8; }
   font-size: 10px;
   letter-spacing: 2px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -1167,7 +1178,7 @@ a:hover { color: #e8d5a8; }
   font-size: 10px;
   letter-spacing: 2px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
 }
 .chr-tab-btn:hover  { border-color: rgba(201,162,39,0.35); color: #c9a227; }
 .chr-tab-btn.active { border-color: rgba(201,162,39,0.5); color: #c9a227; background: rgba(201,162,39,0.1); }
@@ -1243,7 +1254,7 @@ a:hover { color: #e8d5a8; }
   font-size: 9px;
   letter-spacing: 2px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
 }
 .chr-range-btn:hover  { border-color: rgba(201,162,39,0.35); color: #c9a227; }
 .chr-range-btn.active { border-color: rgba(201,162,39,0.5); color: #c9a227; background: rgba(201,162,39,0.1); }
