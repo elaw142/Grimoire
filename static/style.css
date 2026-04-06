@@ -290,7 +290,22 @@ a:hover { color: #e8d5a8; }
 }
 
 .stat-card:hover { border-color: rgba(201,162,39,0.35); transform: translateY(-1px); }
-.stat-card.flash { box-shadow: 0 0 18px var(--card-color, rgba(201,162,39,0.35)); }
+.stat-card.flash { box-shadow: 0 0 22px var(--card-color, rgba(201,162,39,0.35)); }
+
+/* Arcane ring pulse on XP gain */
+.arcane-ring {
+  position: fixed;
+  border-radius: 3px;
+  border: 1px solid var(--ring-color, rgba(201,162,39,0.8));
+  pointer-events: none;
+  z-index: 5000;
+  animation: arcaneRingExpand 0.72s ease-out forwards;
+}
+
+@keyframes arcaneRingExpand {
+  0%   { opacity: 0.8; transform: scale(1);    box-shadow: 0 0 8px var(--ring-color); }
+  100% { opacity: 0;   transform: scale(1.13); box-shadow: 0 0 0px transparent; }
+}
 
 .card-inner { display: flex; gap: 14px; align-items: center; }
 
@@ -521,7 +536,7 @@ a:hover { color: #e8d5a8; }
   position: fixed;
   inset: 0;
   background: rgba(0,0,0,0.75);
-  z-index: 100;
+  z-index: 10000;
   display: flex;
   align-items: flex-end;
   justify-content: center;
@@ -929,23 +944,47 @@ a:hover { color: #e8d5a8; }
   justify-content: center;
   padding: 14px;
   pointer-events: none;
-  animation: bannerDrop 0.25s cubic-bezier(.4,0,.2,1);
+  animation: bannerReveal 0.4s cubic-bezier(.2,0,.2,1);
 }
 
-.levelup-banner.hidden { display: none; }
+.levelup-banner.hidden  { display: none; }
+.levelup-banner.hiding  { animation: bannerDismiss 0.35s cubic-bezier(.4,0,1,1) forwards; }
 
-@keyframes bannerDrop {
-  from { transform: translateY(-100%); opacity: 0; }
-  to   { transform: none; opacity: 1; }
+@keyframes bannerReveal {
+  0%   { opacity: 0; transform: translateY(-6px) scale(0.97); }
+  60%  { opacity: 1; transform: translateY(1px)  scale(1.005); }
+  100% { opacity: 1; transform: none; }
+}
+
+@keyframes bannerDismiss {
+  0%   { opacity: 1; transform: none; }
+  100% { opacity: 0; transform: translateY(-6px) scale(0.97); }
 }
 
 .levelup-inner {
+  position: relative;
+  overflow: hidden;
   background: #100e0a;
-  border: 1px solid rgba(201,162,39,0.5);
+  border: 1px solid var(--banner-color, rgba(201,162,39,0.5));
   border-radius: 4px;
   padding: 10px 20px;
   text-align: center;
-  box-shadow: 0 0 30px rgba(201,162,39,0.2);
+  box-shadow: 0 0 30px var(--banner-color, rgba(201,162,39,0.2)), 0 0 60px var(--banner-color, rgba(201,162,39,0.08));
+}
+
+.levelup-inner::before {
+  content: '';
+  position: absolute;
+  top: 0; left: -80%;
+  width: 50%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.07), transparent);
+  animation: bannerShimmer 0.65s 0.15s ease forwards;
+}
+
+@keyframes bannerShimmer {
+  from { left: -80%; }
+  to   { left: 140%; }
 }
 
 .levelup-eyebrow {

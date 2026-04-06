@@ -196,9 +196,20 @@ function flashCard(schoolId) {
   const card = document.getElementById(`card-${schoolId}`);
   if (!card) return;
   const s = getSchool(schoolId);
-  card.style.setProperty('--card-color', s ? s.color + '50' : '');
+  const color = s ? s.color : '#c9a227';
+  card.style.setProperty('--card-color', color + '50');
   card.classList.add('flash');
   setTimeout(() => card.classList.remove('flash'), 900);
+
+  // Arcane ring pulses — two rings expand outward from the card
+  const rect = card.getBoundingClientRect();
+  for (let i = 0; i < 2; i++) {
+    const ring = document.createElement('div');
+    ring.className = 'arcane-ring';
+    ring.style.cssText = `left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;height:${rect.height}px;--ring-color:${color};animation-delay:${i * 0.18}s;`;
+    document.body.appendChild(ring);
+    setTimeout(() => ring.remove(), 900 + i * 180);
+  }
 }
 
 function addSchoolCard(school) {
@@ -310,10 +321,14 @@ function showBanner(school, level, rank) {
   document.getElementById('levelup-text').textContent = `${school.name} \u2014 Level ${level}`;
   document.getElementById('levelup-text').style.color = school.color;
   document.getElementById('levelup-sub').textContent  = `Rank ${rank.name} \u00b7 The Augur reforges your incantations`;
-  banner.classList.remove('hidden');
+  banner.style.setProperty('--banner-color', school.color);
+  banner.classList.remove('hidden', 'hiding');
   void banner.offsetWidth;
   if (bannerTimer) clearTimeout(bannerTimer);
-  bannerTimer = setTimeout(() => banner.classList.add('hidden'), 3500);
+  bannerTimer = setTimeout(() => {
+    banner.classList.add('hiding');
+    setTimeout(() => { banner.classList.remove('hiding'); banner.classList.add('hidden'); }, 360);
+  }, 3800);
 }
 
 // ── Spell drawer ──────────────────────────────────────────────────────────────
