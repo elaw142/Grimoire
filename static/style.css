@@ -1082,6 +1082,7 @@ a:hover { color: #e8d5a8; }
   display: flex;
   flex-direction: column;
   gap: 4px;
+  animation: streamPulse 1.6s ease-in-out infinite;
 }
 
 .augur-stream-name {
@@ -1089,7 +1090,6 @@ a:hover { color: #e8d5a8; }
   font-size: 11px;
   letter-spacing: 1px;
   color: rgba(201,162,39,0.6);
-  animation: streamPulse 1.6s ease-in-out infinite;
 }
 
 @keyframes streamPulse {
