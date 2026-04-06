@@ -411,6 +411,46 @@ def logout():
     return redirect(url_for('login'))
 
 
+@app.route('/api/account/username', methods=['POST'])
+@require_login_api
+def api_change_username():
+    user_id = session['user_id']
+    data = request.get_json()
+    new_username = (data.get('username') or '').strip()
+    password = data.get('password') or ''
+    if len(new_username) < 3 or len(new_username) > 30:
+        return jsonify({'error': 'Username must be 3–30 characters.'}), 400
+    db = get_db()
+    user = db.execute('SELECT * FROM users WHERE id=?', (user_id,)).fetchone()
+    if not bcrypt.checkpw(password.encode(), user['password_hash'].encode()):
+        return jsonify({'error': 'Incorrect password.'}), 403
+    if db.execute('SELECT id FROM users WHERE username=? AND id!=?', (new_username, user_id)).fetchone():
+        return jsonify({'error': 'That name is already claimed.'}), 409
+    db.execute('UPDATE users SET username=? WHERE id=?', (new_username, user_id))
+    db.commit()
+    session['username'] = new_username
+    return jsonify({'username': new_username})
+
+
+@app.route('/api/account/password', methods=['POST'])
+@require_login_api
+def api_change_password():
+    user_id = session['user_id']
+    data = request.get_json()
+    current_password = data.get('current_password') or ''
+    new_password = data.get('new_password') or ''
+    if len(new_password) < 6:
+        return jsonify({'error': 'New password must be at least 6 characters.'}), 400
+    db = get_db()
+    user = db.execute('SELECT * FROM users WHERE id=?', (user_id,)).fetchone()
+    if not bcrypt.checkpw(current_password.encode(), user['password_hash'].encode()):
+        return jsonify({'error': 'Incorrect current password.'}), 403
+    pw_hash = bcrypt.hashpw(new_password.encode(), bcrypt.gensalt()).decode()
+    db.execute('UPDATE users SET password_hash=? WHERE id=?', (pw_hash, user_id))
+    db.commit()
+    return jsonify({'ok': True})
+
+
 # ── Main page ─────────────────────────────────────────────────────────────────
 
 @app.route('/')

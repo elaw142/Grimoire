@@ -1331,11 +1331,11 @@ a:hover { color: #e8d5a8; }
   background: none;
   border: none;
   border-bottom: 2px solid transparent;
-  padding: 8px 6px;
+  padding: 8px 4px;
   color: #7a6a50;
   font-family: 'Cinzel', serif;
   font-size: 10px;
-  letter-spacing: 2px;
+  letter-spacing: 1px;
   cursor: pointer;
   transition: color 0.15s, background 0.15s, border-color 0.15s;
   -webkit-tap-highlight-color: transparent;

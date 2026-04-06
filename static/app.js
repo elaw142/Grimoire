@@ -939,6 +939,7 @@ function renderMenuContent() {
   if (menuTab === 'chronicle') renderChronicle();
   else if (menuTab === 'orrery') renderOrrery();
   else if (menuTab === 'augur')  renderAugurTab();
+  else if (menuTab === 'account') renderAccountTab();
 }
 
 // ── Chronicle ─────────────────────────────────────────────────────────────────
@@ -1618,6 +1619,76 @@ async function confirmNewSchool() {
     el.prepend(succEl);
     setTimeout(() => succEl.remove(), 2500);
   }
+}
+
+// ── Account settings ──────────────────────────────────────────────────────────
+
+function renderAccountTab() {
+  const el = document.getElementById('menu-content');
+  if (!el) return;
+  el.innerHTML = `
+    <div class="augur-section">
+      <div class="augur-section-title">RENAME THYSELF</div>
+      <div class="augur-section-sub">A new name must be sealed with your current passphrase.</div>
+      <input class="oracle-input" id="acc-new-username" type="text" maxlength="30"
+             placeholder="New name (3–30 characters)" style="width:100%;margin-bottom:8px;">
+      <input class="oracle-input" id="acc-rename-password" type="password"
+             placeholder="Current passphrase" style="width:100%;margin-bottom:10px;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div id="acc-username-msg" style="flex:1;font-family:'Cinzel',serif;font-size:10px;letter-spacing:1px;"></div>
+        <button class="oracle-submit" onclick="doChangeUsername()">INSCRIBE</button>
+      </div>
+    </div>
+    <div class="divider" style="margin:16px 0;"></div>
+    <div class="augur-section">
+      <div class="augur-section-title">FORGE NEW PASSPHRASE</div>
+      <div class="augur-section-sub">Minimum 6 characters.</div>
+      <input class="oracle-input" id="acc-current-password" type="password"
+             placeholder="Current passphrase" style="width:100%;margin-bottom:8px;">
+      <input class="oracle-input" id="acc-new-password" type="password"
+             placeholder="New passphrase" style="width:100%;margin-bottom:8px;">
+      <input class="oracle-input" id="acc-confirm-password" type="password"
+             placeholder="Confirm new passphrase" style="width:100%;margin-bottom:10px;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div id="acc-password-msg" style="flex:1;font-family:'Cinzel',serif;font-size:10px;letter-spacing:1px;"></div>
+        <button class="oracle-submit" onclick="doChangePassword()">SEAL</button>
+      </div>
+    </div>`;
+}
+
+function setAccountMsg(id, text, isError) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = text;
+  el.style.color = isError ? 'rgba(255,80,60,0.8)' : 'rgba(201,162,39,0.7)';
+}
+
+async function doChangeUsername() {
+  const username = (document.getElementById('acc-new-username')?.value || '').trim();
+  const password = document.getElementById('acc-rename-password')?.value || '';
+  if (!username) { setAccountMsg('acc-username-msg', 'Enter a new name.', true); return; }
+  const result = await apiFetch('/api/account/username', { username, password });
+  if (result.error) { setAccountMsg('acc-username-msg', result.error, true); return; }
+  document.getElementById('acc-new-username').value = '';
+  document.getElementById('acc-rename-password').value = '';
+  setAccountMsg('acc-username-msg', `\u2726 Name changed to ${result.username}`, false);
+  // Update header display
+  const nameEl = document.querySelector('.header-name');
+  if (nameEl) nameEl.textContent = result.username;
+}
+
+async function doChangePassword() {
+  const current = document.getElementById('acc-current-password')?.value || '';
+  const next    = document.getElementById('acc-new-password')?.value || '';
+  const confirm = document.getElementById('acc-confirm-password')?.value || '';
+  if (next !== confirm) { setAccountMsg('acc-password-msg', 'Passphrases do not match.', true); return; }
+  if (next.length < 6)  { setAccountMsg('acc-password-msg', 'Passphrase must be at least 6 characters.', true); return; }
+  const result = await apiFetch('/api/account/password', { current_password: current, new_password: next });
+  if (result.error) { setAccountMsg('acc-password-msg', result.error, true); return; }
+  document.getElementById('acc-current-password').value = '';
+  document.getElementById('acc-new-password').value = '';
+  document.getElementById('acc-confirm-password').value = '';
+  setAccountMsg('acc-password-msg', '\u2726 Passphrase sealed', false);
 }
 
 // ── Rank info tooltip ─────────────────────────────────────────────────────────

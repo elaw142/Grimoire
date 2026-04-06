@@ -123,6 +123,7 @@
       <button class="menu-tab active" data-tab="chronicle" onclick="setMenuTab('chronicle')">CHRONICLE</button>
       <button class="menu-tab" data-tab="orrery" onclick="setMenuTab('orrery')">ORRERY</button>
       <button class="menu-tab" data-tab="augur" onclick="setMenuTab('augur')">AUGUR</button>
+      <button class="menu-tab" data-tab="account" onclick="setMenuTab('account')">ACCOUNT</button>
     </div>
     <div id="menu-content" class="menu-content"></div>
     <div class="menu-footer">
@@ -190,6 +191,6 @@
   window.XP_PER_LEVEL = 100;
   window.RANKS        = {{ ranks | tojson }};
 </script>
-<script src="/static/app.js?v=18"></script>
+<script src="/static/app.js?v=21"></script>
 <script src="/static/particles.js"></script>
 {% endblock %}
