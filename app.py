@@ -647,30 +647,22 @@ def api_augur_recalibrate():
         domain_examples = f'habits directly related to: {school["flavour"]}'
 
     system = (
-        'You are the Augur — a dark fantasy sage calibrating a hero\'s training regimen. '
-        'Return ONLY valid JSON: {"spells":[{"name":"string","description":"string","xp":number}]}. '
-        '4-5 spells. '
-        'These spells are habits the user logs RETROACTIVELY — they already did the thing and are recording it. '
-        'Each spell must be something real a person would actually do and later recognise as done. '
-        'RULE 1 — every spell must be a concrete, repeatable daily habit from the school\'s literal real-world domain. '
-        'Do NOT invent tasks from the school\'s fantasy name, aesthetic, or flavour. '
-        'A climbing school generates climbing and fitness habits. A cooking school generates cooking habits. Never cave imagery, never shadow metaphors. '
-        'RULE 2 — "description" is ONE plain sentence: action + specific target. No fantasy language, no fluff. '
-        'GOOD: "Walk 8,000 steps", "Do 20 push-ups", "Cook a meal from scratch", "Read for 30 minutes". '
-        'BAD: "Commune with spirits", "Forge your will in shadow", "Seek visions in the abyss". '
-        'RULE 3 — "name" is a short fantasy incantation title (2-4 words) wrapping the real-world task. This is the ONLY fantasy part. '
-        'Mix: (A) Latin/mystical (e.g. "Somnium", "Hydor", "Ignis Vitae") or (B) fantasy patterns (e.g. "Hex of Fortitude", "Rite of Iron"). '
-        'XP 10-50 scaled to effort. No markdown, no extra keys.'
+        'Augur: calibrate hero habits. '
+        'JSON only: {"spells":[{"name":"string","description":"string","xp":number}]}. '
+        '4-5 spells, logged after completion. '
+        'R1: concrete real-world habits from the domain — never fantasy imagery or flavour metaphors. '
+        'R2: description = one plain sentence (e.g. "Walk 8000 steps", "Cook a meal from scratch"). '
+        'R3: name = 2-4 word fantasy title only (e.g. "Rite of Iron", "Somnium Vitae"). '
+        'XP 10-50 by effort. No markdown.'
     )
     user_msg = (
-        f'SCHOOL: {school["name"].upper()}\n'
-        f'Domain: {school["flavour"]}\n'
-        f'Example habits for this school: {domain_examples}\n'
-        f'Recent acts: {summary}.\n'
+        f'School: {school["name"]}, domain: {school["flavour"]}.\n'
+        f'Examples: {domain_examples}\n'
+        f'Recent: {summary}.\n'
     )
     if context:
-        user_msg += f'Seeker\'s guidance: "{context}"\n'
-    user_msg += 'Vary habits to avoid repeating overused ones.'
+        user_msg += f'Guidance: "{context}"\n'
+    user_msg += 'Vary to avoid repeats.'
 
     full_prompt = f'{system}\n\n{user_msg}'
 
@@ -683,7 +675,7 @@ def api_augur_recalibrate():
                 'prompt': full_prompt,
                 'stream': True,
                 'format': 'json',
-                'options': {'temperature': 0.4, 'num_predict': 550, 'num_ctx': 1024},
+                'options': {'temperature': 0.4, 'num_predict': 550, 'num_ctx': 2048},
             }, stream=True, timeout=90)
             resp.raise_for_status()
             for line in resp.iter_lines():

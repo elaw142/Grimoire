@@ -141,6 +141,19 @@ function extractStreamNames(partial) {
   return [...partial.matchAll(/"name"\s*:\s*"([^"\\]+)"/g)].map(m => m[1]);
 }
 
+// Append only newly-seen spell names to a stream preview element.
+// Existing entries are left untouched so their pulse animation doesn't restart.
+function updateStreamPreview(el, names) {
+  if (!el || !names.length) return;
+  const existing = el.querySelectorAll('.augur-stream-name').length;
+  for (let i = existing; i < names.length; i++) {
+    const div = document.createElement('div');
+    div.className = 'augur-stream-name';
+    div.textContent = names[i];
+    el.appendChild(div);
+  }
+}
+
 function escHtml(str) {
   return String(str)
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
@@ -838,7 +851,7 @@ async function triggerRecalibrate(schoolId) {
       const names = extractStreamNames(partial);
       const el = document.getElementById('recal-stream-preview');
       if (el && names.length) {
-        el.innerHTML = names.map(n => `<div class="augur-stream-name">${escHtml(n)}</div>`).join('');
+        updateStreamPreview(el, names);
       }
     }
   );
@@ -851,13 +864,14 @@ async function triggerRecalibrate(schoolId) {
   }
 
   pendingRecal = { schoolId, schoolName: school?.name || '', spells: result.spells };
+  const xpColor = school?.color || '#c9a227';
   const spellRows = result.spells.map(sp => `
     <div class="augur-spell-row">
       <span class="augur-spell-name-wrap">
         <span>${escHtml(sp.name)}</span>
         ${sp.description ? `<span class="augur-spell-desc">${escHtml(sp.description)}</span>` : ''}
       </span>
-      <span class="augur-spell-xp">+${sp.xp} XP</span>
+      <span class="augur-spell-xp" style="color:${xpColor}">+${sp.xp} XP</span>
     </div>`).join('');
   document.getElementById('recal-panel-spells').innerHTML = spellRows;
   document.getElementById('recal-panel-loading').style.display = 'none';
@@ -1368,13 +1382,14 @@ function renderRecalibrateSection() {
   }
 
   if (st.recalResult) {
+    const xpColor = st.recalResult.schoolColor || '#c9a227';
     const spellRows = st.recalResult.spells.map(sp =>
       `<div class="augur-spell-row">
          <span class="augur-spell-name-wrap">
            <span>${escHtml(sp.name)}</span>
            ${sp.description ? `<span class="augur-spell-desc">${escHtml(sp.description)}</span>` : ''}
          </span>
-         <span class="augur-spell-xp">+${sp.xp} XP</span>
+         <span class="augur-spell-xp" style="color:${xpColor}">+${sp.xp} XP</span>
        </div>`
     ).join('');
     return `
@@ -1499,7 +1514,7 @@ async function doAugurRecalibrate() {
       const names = extractStreamNames(partial);
       const el = document.getElementById('augur-stream-preview');
       if (el && names.length) {
-        el.innerHTML = names.map(n => `<div class="augur-stream-name">${escHtml(n)}</div>`).join('');
+        updateStreamPreview(el, names);
       }
     }
   );
@@ -1515,7 +1530,7 @@ async function doAugurRecalibrate() {
   }
 
   const school = getSchool(schoolId);
-  augurState.recalResult = { schoolId, schoolName: school?.name || '', spells: result.spells };
+  augurState.recalResult = { schoolId, schoolName: school?.name || '', schoolColor: school?.color || '#c9a227', spells: result.spells };
   renderAugurTab();
 }
 
@@ -1544,7 +1559,7 @@ async function doAugurDiscover() {
       const names = extractStreamNames(partial);
       const el = document.getElementById('augur-stream-preview');
       if (el && names.length) {
-        el.innerHTML = names.map(n => `<div class="augur-stream-name">${escHtml(n)}</div>`).join('');
+        updateStreamPreview(el, names);
       }
     }
   );

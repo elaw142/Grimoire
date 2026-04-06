@@ -1088,8 +1088,13 @@ a:hover { color: #e8d5a8; }
   font-family: 'Cinzel', serif;
   font-size: 11px;
   letter-spacing: 1px;
-  color: rgba(201,162,39,0.5);
-  animation: fadein 0.3s ease;
+  color: rgba(201,162,39,0.6);
+  animation: streamPulse 1.6s ease-in-out infinite;
+}
+
+@keyframes streamPulse {
+  0%, 100% { opacity: 0.35; }
+  50%       { opacity: 0.8; }
 }
 
 .recal-flavour-text {
