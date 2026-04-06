@@ -141,6 +141,7 @@
     <div id="recal-panel-loading">
       <div class="recal-panel-sub recal-flavour-text" id="recal-flavour-text">The Augur stirs&hellip;</div>
       <div class="recal-panel-spinner"><div class="ai-spinner"></div></div>
+      <div id="recal-stream-preview" class="augur-stream-preview" style="margin-top:10px;"></div>
     </div>
     <div id="recal-panel-results" style="display:none;">
       <div class="recal-panel-sub">New incantations have been forged. Accept or deny.</div>
@@ -189,5 +190,6 @@
   window.XP_PER_LEVEL = 100;
   window.RANKS        = {{ ranks | tojson }};
 </script>
-<script src="/static/app.js?v=7"></script>
+<script src="/static/app.js?v=14"></script>
+<script src="/static/particles.js"></script>
 {% endblock %}

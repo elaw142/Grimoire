@@ -1077,6 +1077,21 @@ a:hover { color: #e8d5a8; }
   padding: 16px 0 4px;
 }
 
+.augur-stream-preview {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.augur-stream-name {
+  font-family: 'Cinzel', serif;
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: rgba(201,162,39,0.5);
+  animation: fadein 0.3s ease;
+}
+
 .recal-flavour-text {
   transition: opacity 0.3s ease;
 }

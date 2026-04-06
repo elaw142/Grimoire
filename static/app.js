@@ -103,6 +103,44 @@ async function apiFetch(url, body, method = 'POST') {
   return resp.json();
 }
 
+// Consume a streaming SSE endpoint. Calls onPartial(accumulatedJson) for each token,
+// returns the final {done, ...} or {err} event as a plain object.
+async function fetchStream(url, body, onPartial) {
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!resp.ok) return { err: 'Request failed' };
+  const reader = resp.body.getReader();
+  const dec    = new TextDecoder();
+  let buf = '', partial = '';
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    const lines = buf.split('\n');
+    buf = lines.pop();
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue;
+      let evt;
+      try { evt = JSON.parse(line.slice(6)); } catch { continue; }
+      if (evt.t !== undefined) {
+        partial += evt.t;
+        if (onPartial) onPartial(partial);
+      } else if (evt.done || evt.err) {
+        return evt;
+      }
+    }
+  }
+  return { err: 'Stream ended unexpectedly' };
+}
+
+// Extract "name" values seen so far in partial JSON — used for live spell previews.
+function extractStreamNames(partial) {
+  return [...partial.matchAll(/"name"\s*:\s*"([^"\\]+)"/g)].map(m => m[1]);
+}
+
 function escHtml(str) {
   return String(str)
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
@@ -793,16 +831,22 @@ async function triggerRecalibrate(schoolId) {
   document.getElementById('recal-panel').classList.remove('hidden');
   startRecalFlavour('recal-flavour-text');
 
-  let result;
-  try {
-    result = await apiFetch('/api/augur/recalibrate', { school_id: schoolId, context: '' });
-  } finally {
-    stopRecalFlavour();
-  }
+  const result = await fetchStream(
+    '/api/augur/recalibrate',
+    { school_id: schoolId, context: '' },
+    partial => {
+      const names = extractStreamNames(partial);
+      const el = document.getElementById('recal-stream-preview');
+      if (el && names.length) {
+        el.innerHTML = names.map(n => `<div class="augur-stream-name">${escHtml(n)}</div>`).join('');
+      }
+    }
+  );
+  stopRecalFlavour();
 
-  if (!result || result.error || !result.spells) {
+  if (!result || result.err || !result.spells) {
     document.getElementById('recal-panel').classList.add('hidden');
-    showError((result && result.error) || 'The Augur could not recalibrate at this time.');
+    showError(result?.err || 'The Augur could not recalibrate at this time.');
     return;
   }
 
@@ -1318,6 +1362,7 @@ function renderRecalibrateSection() {
           <div id="augur-recal-flavour" class="recal-flavour-text" style="font-family:'Cinzel',serif;font-size:10px;letter-spacing:2px;color:#7a6a50;">
             THE AUGUR DELIBERATES&hellip;
           </div>
+          <div id="augur-stream-preview" class="augur-stream-preview"></div>
         </div>
       </div>`;
   }
@@ -1376,6 +1421,7 @@ function renderDiscoverSection() {
           <div id="augur-discover-flavour" class="recal-flavour-text" style="font-family:'Cinzel',serif;font-size:10px;letter-spacing:2px;color:#7a6a50;">
             THE AUGUR DIVINES&hellip;
           </div>
+          <div id="augur-stream-preview" class="augur-stream-preview"></div>
         </div>
       </div>`;
   }
@@ -1446,18 +1492,25 @@ async function doAugurRecalibrate() {
   augurState.recalLoading = true;
   renderAugurTab();
 
-  let result;
-  try {
-    result = await apiFetch('/api/augur/recalibrate', { school_id: schoolId, context });
-  } finally {
-    stopRecalFlavour();
-    augurState.recalLoading = false;
-  }
+  const result = await fetchStream(
+    '/api/augur/recalibrate',
+    { school_id: schoolId, context },
+    partial => {
+      const names = extractStreamNames(partial);
+      const el = document.getElementById('augur-stream-preview');
+      if (el && names.length) {
+        el.innerHTML = names.map(n => `<div class="augur-stream-name">${escHtml(n)}</div>`).join('');
+      }
+    }
+  );
 
-  if (!result || result.error || !result.spells) {
+  stopRecalFlavour();
+  augurState.recalLoading = false;
+
+  if (!result || result.err || !result.spells) {
     augurState.recalResult = null;
     renderAugurTab();
-    showError((result && result.error) || 'The Augur could not recalibrate at this time.');
+    showError(result?.err || 'The Augur could not recalibrate at this time.');
     return;
   }
 
@@ -1484,13 +1537,23 @@ async function doAugurDiscover() {
   augurState.discoverStage  = 'loading';
   renderAugurTab();
 
-  const result = await apiFetch('/api/augur/school', { description: desc });
+  const result = await fetchStream(
+    '/api/augur/school',
+    { description: desc },
+    partial => {
+      const names = extractStreamNames(partial);
+      const el = document.getElementById('augur-stream-preview');
+      if (el && names.length) {
+        el.innerHTML = names.map(n => `<div class="augur-stream-name">${escHtml(n)}</div>`).join('');
+      }
+    }
+  );
   stopRecalFlavour();
 
-  if (result.error || !result.name) {
+  if (result.err || !result.name) {
     augurState.discoverStage = 'input';
     renderAugurTab();
-    showError(result.error || 'The Augur could not conceive a school. Try again.');
+    showError(result.err || 'The Augur could not conceive a school. Try again.');
     return;
   }
 

@@ -5,7 +5,7 @@ import os
 import re
 from datetime import datetime, timedelta
 from functools import wraps
-from flask import Flask, render_template, request, session, redirect, url_for, jsonify, g
+from flask import Flask, render_template, request, session, redirect, url_for, jsonify, g, Response, stream_with_context
 import bcrypt
 import requests
 
@@ -217,7 +217,7 @@ def require_login_api(f):
     return decorated
 
 
-def call_augur(system_prompt, user_prompt, num_predict=400, retries=1, temperature=0.5):
+def call_augur(system_prompt, user_prompt, num_predict=400, retries=1, temperature=0.5, num_ctx=2048):
     full_prompt = f"{system_prompt}\n\n{user_prompt}"
     for attempt in range(retries + 1):
         try:
@@ -226,7 +226,7 @@ def call_augur(system_prompt, user_prompt, num_predict=400, retries=1, temperatu
                 'prompt': full_prompt,
                 'stream': False,
                 'format': 'json',
-                'options': {'temperature': temperature, 'num_predict': num_predict},
+                'options': {'temperature': temperature, 'num_predict': num_predict, 'num_ctx': num_ctx},
             }, timeout=90)
             resp.raise_for_status()
             raw = resp.json().get('response', '')
@@ -494,18 +494,14 @@ def api_augur_deed():
     level = get_level(current_xp)
 
     system = (
-        'You are the Augur \u2014 a deadpan fantasy arbiter of mortal effort. '
-        'Speak in 1\u20132 terse archaic sentences. Never encouraging, never effusive. '
-        'Return ONLY valid JSON: {"xp":number,"verdict":"string"}. '
-        'XP 5\u201350 scaled to effort at this level. No markdown, no extra keys.'
+        'Augur: terse fantasy arbiter. 1-2 archaic sentences, never effusive. '
+        'JSON only: {"xp":number,"verdict":"string"}. XP 5-50 by effort. No markdown.'
     )
     user_msg = (
-        f'School: {school["name"]}, Level {level}.\n'
-        f'The seeker claims: "{deed}"\n'
-        'Judge this deed and assign XP.'
+        f'School: {school["name"]}, LV{level}. Deed: "{deed}". Judge and assign XP.'
     )
 
-    result = call_augur(system, user_msg, num_predict=80)
+    result = call_augur(system, user_msg, num_predict=80, num_ctx=512)
     if not result or 'xp' not in result or 'verdict' not in result:
         return jsonify({'error': 'The Augur is silent. The ether is troubled.'}), 503
 
@@ -622,7 +618,7 @@ def _save_recal_spells(db, school_id, spells):
 @app.route('/api/augur/recalibrate', methods=['POST'])
 @require_login_api
 def api_augur_recalibrate():
-    """Preview recalibrated spells without saving — returns proposed spells for user to accept/deny."""
+    """Stream recalibrated spells via SSE — yields tokens then a final done event."""
     user_id = session['user_id']
     data = request.get_json()
     school_id = data.get('school_id')
@@ -635,12 +631,96 @@ def api_augur_recalibrate():
         return jsonify({'error': 'Not found'}), 404
 
     context = data.get('context', '').strip()
+    school = dict(school)
 
-    spells = _generate_recal_spells(dict(school), context, db, user_id)
-    if not spells:
-        return jsonify({'error': 'The Augur could not recalibrate at this time.'}), 503
+    deed_rows = db.execute(
+        'SELECT deed_name FROM deed_log WHERE user_id=? AND school_id=? ORDER BY cast_at DESC LIMIT 20',
+        (user_id, school_id),
+    ).fetchall()
+    freq = {}
+    for row in deed_rows:
+        freq[row['deed_name']] = freq.get(row['deed_name'], 0) + 1
+    summary = ', '.join(f'"{k}" \xd7{v}' for k, v in freq.items()) or 'none yet'
 
-    return jsonify({'spells': spells})
+    domain_examples = SCHOOL_HABIT_EXAMPLES.get(school['name'], '')
+    if not domain_examples:
+        domain_examples = f'habits directly related to: {school["flavour"]}'
+
+    system = (
+        'You are the Augur — a dark fantasy sage calibrating a hero\'s training regimen. '
+        'Return ONLY valid JSON: {"spells":[{"name":"string","description":"string","xp":number}]}. '
+        '4-5 spells. '
+        'These spells are habits the user logs RETROACTIVELY — they already did the thing and are recording it. '
+        'Each spell must be something real a person would actually do and later recognise as done. '
+        'RULE 1 — every spell must be a concrete, repeatable daily habit from the school\'s literal real-world domain. '
+        'Do NOT invent tasks from the school\'s fantasy name, aesthetic, or flavour. '
+        'A climbing school generates climbing and fitness habits. A cooking school generates cooking habits. Never cave imagery, never shadow metaphors. '
+        'RULE 2 — "description" is ONE plain sentence: action + specific target. No fantasy language, no fluff. '
+        'GOOD: "Walk 8,000 steps", "Do 20 push-ups", "Cook a meal from scratch", "Read for 30 minutes". '
+        'BAD: "Commune with spirits", "Forge your will in shadow", "Seek visions in the abyss". '
+        'RULE 3 — "name" is a short fantasy incantation title (2-4 words) wrapping the real-world task. This is the ONLY fantasy part. '
+        'Mix: (A) Latin/mystical (e.g. "Somnium", "Hydor", "Ignis Vitae") or (B) fantasy patterns (e.g. "Hex of Fortitude", "Rite of Iron"). '
+        'XP 10-50 scaled to effort. No markdown, no extra keys.'
+    )
+    user_msg = (
+        f'SCHOOL: {school["name"].upper()}\n'
+        f'Domain: {school["flavour"]}\n'
+        f'Example habits for this school: {domain_examples}\n'
+        f'Recent acts: {summary}.\n'
+    )
+    if context:
+        user_msg += f'Seeker\'s guidance: "{context}"\n'
+    user_msg += 'Vary habits to avoid repeating overused ones.'
+
+    full_prompt = f'{system}\n\n{user_msg}'
+
+    @stream_with_context
+    def generate():
+        full_text = ''
+        try:
+            resp = requests.post(OLLAMA_URL, json={
+                'model': OLLAMA_MODEL,
+                'prompt': full_prompt,
+                'stream': True,
+                'format': 'json',
+                'options': {'temperature': 0.4, 'num_predict': 550, 'num_ctx': 1024},
+            }, stream=True, timeout=90)
+            resp.raise_for_status()
+            for line in resp.iter_lines():
+                if not line:
+                    continue
+                chunk = json.loads(line)
+                token = chunk.get('response', '')
+                full_text += token
+                yield f'data: {json.dumps({"t": token})}\n\n'
+                if chunk.get('done'):
+                    break
+        except Exception as e:
+            log.warning('recalibrate stream error: %s', e)
+            yield f'data: {json.dumps({"err": "The Augur could not recalibrate at this time."})}\n\n'
+            return
+
+        try:
+            raw = re.sub(r'```(?:json)?', '', full_text).strip('` \n')
+            result = json.loads(raw)
+            spells = []
+            for sp in result.get('spells', [])[:5]:
+                if 'name' in sp and 'xp' in sp:
+                    spells.append({
+                        'name': str(sp['name'])[:80],
+                        'description': str(sp.get('description', ''))[:120],
+                        'xp': max(10, min(50, int(sp['xp']))),
+                    })
+            if spells:
+                yield f'data: {json.dumps({"done": True, "spells": spells})}\n\n'
+            else:
+                yield f'data: {json.dumps({"err": "The Augur could not recalibrate at this time."})}\n\n'
+        except Exception as e:
+            log.warning('recalibrate parse error: %s | raw: %.200s', e, full_text)
+            yield f'data: {json.dumps({"err": "The Augur could not recalibrate at this time."})}\n\n'
+
+    return Response(generate(), mimetype='text/event-stream',
+                    headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})
 
 
 @app.route('/api/augur/recalibrate/confirm', methods=['POST'])
@@ -692,25 +772,54 @@ def api_augur_school():
         'XP 10-50 scaled to effort. No markdown, no extra keys.'
     )
     user_msg = f'The seeker wishes to cultivate: "{description}"\nCreate a school of magic for this pursuit.'
+    full_prompt = f'{system}\n\n{user_msg}'
 
-    result = call_augur(system, user_msg, num_predict=500)
-    if not result or 'name' not in result or 'spells' not in result:
-        return jsonify({'error': 'The Augur could not conceive a school at this time.'}), 503
+    @stream_with_context
+    def generate():
+        full_text = ''
+        try:
+            resp = requests.post(OLLAMA_URL, json={
+                'model': OLLAMA_MODEL,
+                'prompt': full_prompt,
+                'stream': True,
+                'format': 'json',
+                'options': {'temperature': 0.5, 'num_predict': 500, 'num_ctx': 1024},
+            }, stream=True, timeout=90)
+            resp.raise_for_status()
+            for line in resp.iter_lines():
+                if not line:
+                    continue
+                chunk = json.loads(line)
+                token = chunk.get('response', '')
+                full_text += token
+                yield f'data: {json.dumps({"t": token})}\n\n'
+                if chunk.get('done'):
+                    break
+        except Exception as e:
+            log.warning('school stream error: %s', e)
+            yield f'data: {json.dumps({"err": "The Augur could not conceive a school at this time."})}\n\n'
+            return
 
-    spells = []
-    for sp in result.get('spells', [])[:5]:
-        if 'name' in sp and 'xp' in sp:
-            spells.append({
-                'name': str(sp['name'])[:80],
-                'description': str(sp.get('description', ''))[:120],
-                'xp': max(10, min(50, int(sp['xp']))),
-            })
+        try:
+            raw = re.sub(r'```(?:json)?', '', full_text).strip('` \n')
+            result = json.loads(raw)
+            if 'name' not in result or 'spells' not in result:
+                raise ValueError('missing keys')
+            spells = []
+            for sp in result.get('spells', [])[:5]:
+                if 'name' in sp and 'xp' in sp:
+                    spells.append({
+                        'name': str(sp['name'])[:80],
+                        'description': str(sp.get('description', ''))[:120],
+                        'xp': max(10, min(50, int(sp['xp']))),
+                    })
+            yield f'data: {json.dumps({"done": True, "name": str(result.get("name",""))[:50], "flavour": str(result.get("flavour",""))[:300], "spells": spells})}\n\n'
+        except Exception as e:
+            log.warning('school parse error: %s | raw: %.200s', e, full_text)
+            yield f'data: {json.dumps({"err": "The Augur could not conceive a school at this time."})}\n\n'
 
-    return jsonify({
-        'name': str(result.get('name', ''))[:50],
-        'flavour': str(result.get('flavour', ''))[:300],
-        'spells': spells,
-    })
+    return Response(generate(), mimetype='text/event-stream',
+                    headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})
 
 
 @app.route('/api/augur/school/confirm', methods=['POST'])
