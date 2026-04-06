@@ -27,6 +27,97 @@ a:hover { color: #e8d5a8; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(201,162,39,0.25); border-radius: 2px; }
 
+/* ── Splash screen ────────────────────────────────────────────────────────── */
+#splash {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  background: #0a0806;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  user-select: none;
+}
+
+#splash.fade-out { animation: splashOut 0.5s ease forwards; }
+#splash.hidden   { display: none; }
+
+@keyframes splashOut { to { opacity: 0; } }
+
+.splash-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 28px;
+}
+
+.splash-sigil { width: 130px; height: 130px; }
+
+.sigil-circle {
+  stroke-dasharray: 264;
+  stroke-dashoffset: 264;
+  animation: sigilDraw 0.9s 0.1s cubic-bezier(.4,0,.2,1) forwards;
+}
+
+.sigil-diamond {
+  stroke-dasharray: 204;
+  stroke-dashoffset: 204;
+  animation: sigilDraw 0.7s 0.45s cubic-bezier(.4,0,.2,1) forwards;
+}
+
+.sigil-tick {
+  opacity: 0;
+  animation: sigilAppear 0.3s 0.65s ease forwards;
+}
+
+.sigil-center {
+  opacity: 0;
+  animation: sigilAppear 0.4s 0.8s ease forwards;
+}
+
+@keyframes sigilDraw   { to { stroke-dashoffset: 0; } }
+@keyframes sigilAppear { to { opacity: 1; } }
+
+.splash-title {
+  font-family: 'Cinzel', serif;
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: 10px;
+  color: #c9a227;
+  text-shadow: 0 0 28px rgba(201,162,39,0.35);
+  opacity: 0;
+  animation: splashTextIn 0.6s 0.9s ease forwards;
+}
+
+.splash-sub {
+  font-family: 'Cinzel', serif;
+  font-size: 10px;
+  letter-spacing: 4px;
+  color: rgba(201,162,39,0.4);
+  opacity: 0;
+  margin-top: -16px;
+  animation: splashTextIn 0.5s 1.35s ease forwards;
+}
+
+@keyframes splashTextIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+
+#page-content {
+  opacity: 0;
+}
+
+#page-content.visible {
+  animation: pageReveal 0.5s ease forwards;
+}
+
+@keyframes pageReveal {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+
 /* ── Auth pages ───────────────────────────────────────────────────────────── */
 .auth-wrap {
   min-height: 100vh;

@@ -37,6 +37,19 @@ let augurState = {
 // Misc
 let bannerTimer = null;
 
+// ── Splash screen ─────────────────────────────────────────────────────────────
+function dismissSplash() {
+  const splash = document.getElementById('splash');
+  if (!splash || splash.classList.contains('hidden') || splash.classList.contains('fade-out')) return;
+  splash.classList.add('fade-out');
+  setTimeout(() => {
+    splash.classList.add('hidden');
+    const content = document.getElementById('page-content');
+    if (content) content.classList.add('visible');
+  }, 500);
+}
+setTimeout(dismissSplash, 2600);
+
 // Pending recalibration (level-up flow)
 let pendingRecal = null; // { schoolId, schoolName, spells }
 
