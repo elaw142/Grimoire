@@ -2,7 +2,7 @@
 
 A fantasy-themed habit tracker that turns personal development into an RPG. You earn XP, level up, and unlock ranks by completing real-world tasks — judged by an AI oracle called the Augur.
 
-![Dark fantasy aesthetic with animated splash screen, school cards, and XP system](https://placeholder)
+![Dark fantasy aesthetic with animated splash screen, school cards, and XP system](docs/screenshot.png)
 
 ---
 
@@ -12,13 +12,13 @@ Grimoire organises your habits into **Schools of Magic** — each school maps to
 
 **Default schools:**
 
-| School | Domain |
-|---|---|
-| Restoration | Sleep, nutrition, recovery |
-| Transmutation | Fitness, movement, exercise |
-| Divination | Mindfulness, journaling, reflection |
-| Artifice | Deep work, learning, writing |
-| Enchantment | Relationships, socialising, connection |
+| School        | Domain                                 |
+| ------------- | -------------------------------------- |
+| Restoration   | Sleep, nutrition, recovery             |
+| Transmutation | Fitness, movement, exercise            |
+| Divination    | Mindfulness, journaling, reflection    |
+| Artifice      | Deep work, learning, writing           |
+| Enchantment   | Relationships, socialising, connection |
 
 You can also create custom schools for anything else — cooking, climbing, language learning, etc.
 
@@ -40,15 +40,15 @@ You can also create custom schools for anything else — cooking, climbing, lang
 
 ## Tech stack
 
-| Layer | Technology |
-|---|---|
-| Backend | Python 3, Flask 3 |
-| Database | SQLite (WAL mode) |
-| Auth | bcrypt |
-| AI | Ollama (local) + Mistral 7B |
-| Frontend | Vanilla JS, CSS, Jinja2 templates |
-| Fonts | Cinzel, Crimson Text (Google Fonts) |
-| Production | Gunicorn, systemd, GitHub Actions |
+| Layer      | Technology                          |
+| ---------- | ----------------------------------- |
+| Backend    | Python 3, Flask 3                   |
+| Database   | SQLite (WAL mode)                   |
+| Auth       | bcrypt                              |
+| AI         | Ollama (local) + Mistral 7B         |
+| Frontend   | Vanilla JS, CSS, Jinja2 templates   |
+| Fonts      | Cinzel, Crimson Text (Google Fonts) |
+| Production | Gunicorn, systemd, GitHub Actions   |
 
 ---
 
@@ -87,11 +87,11 @@ The SQLite database (`grimoire.db`) is created automatically on first run.
 
 Two optional environment variables:
 
-| Variable | Default | Description |
-|---|---|---|
-| `SECRET_KEY` | `dev-secret` | Flask session secret — **set this in production** |
-| `OLLAMA_URL` | `http://localhost:11434/api/generate` | Ollama API endpoint |
-| `OLLAMA_MODEL` | `mistral:7b` | Model to use for the Augur |
+| Variable       | Default                               | Description                                       |
+| -------------- | ------------------------------------- | ------------------------------------------------- |
+| `SECRET_KEY`   | `dev-secret`                          | Flask session secret — **set this in production** |
+| `OLLAMA_URL`   | `http://localhost:11434/api/generate` | Ollama API endpoint                               |
+| `OLLAMA_MODEL` | `mistral:7b`                          | Model to use for the Augur                        |
 
 For production, set `SECRET_KEY` to a long random string. Everything else can stay default for a local Ollama setup.
 
@@ -156,11 +156,11 @@ All Augur calls use short prompts and constrained context windows to keep respon
 ## Rank thresholds
 
 | Rank | Min level |
-|---|---|
-| F | 1 |
-| E | 5 |
-| D | 10 |
-| C | 15 |
-| B | 20 |
-| A | 25 |
-| S | 30 |
+| ---- | --------- |
+| F    | 1         |
+| E    | 5         |
+| D    | 10        |
+| C    | 15        |
+| B    | 20        |
+| A    | 25        |
+| S    | 30        |
