@@ -27,6 +27,60 @@ a:hover { color: #e8d5a8; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(201,162,39,0.25); border-radius: 2px; }
 
+/* ── Custom cursor ────────────────────────────────────────────────────────── */
+@media (hover: hover) {
+  * { cursor: none !important; }
+}
+
+#cursor-dot {
+  position: fixed;
+  width: 6px;
+  height: 6px;
+  background: #c9a227;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 999999;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 6px rgba(201,162,39,0.7);
+  transition: width 0.15s, height 0.15s, background 0.15s, box-shadow 0.15s;
+  will-change: left, top;
+}
+
+#cursor-ring {
+  position: fixed;
+  width: 32px;
+  height: 32px;
+  border: 1px solid rgba(201,162,39,0.45);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 999998;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 8px rgba(201,162,39,0.1);
+  transition: width 0.2s, height 0.2s, border-color 0.2s, box-shadow 0.2s;
+  will-change: left, top;
+}
+
+#cursor-dot.on-hot {
+  width: 8px;
+  height: 8px;
+  background: #e8d5a8;
+  box-shadow: 0 0 12px rgba(201,162,39,1);
+}
+
+#cursor-ring.on-hot {
+  width: 42px;
+  height: 42px;
+  border-color: rgba(201,162,39,0.7);
+  box-shadow: 0 0 12px rgba(201,162,39,0.2);
+}
+
+#cursor-ring.pressing {
+  width: 22px;
+  height: 22px;
+  border-color: rgba(201,162,39,0.9);
+  transition: width 0.08s, height 0.08s, border-color 0.08s;
+}
+
 /* ── Splash screen ────────────────────────────────────────────────────────── */
 #splash {
   position: fixed;
