@@ -717,6 +717,18 @@ a:hover { color: #e8d5a8; }
   to   { transform: none; opacity: 1; }
 }
 
+.drawer-edit-footer {
+  position: sticky;
+  bottom: -22px;
+  margin: 14px -20px -22px;
+  padding: 12px 20px;
+  background: #100e0a;
+  border-top: 1px solid rgba(201,162,39,0.1);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
 /* ── Drawer internals ─────────────────────────────────────────────────────── */
 .drawer-header { display: flex; align-items: center; gap: 11px; margin-bottom: 14px; }
 

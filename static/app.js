@@ -583,9 +583,6 @@ function renderDrawerEdit() {
       <textarea class="oracle-input" id="edit-school-description" rows="2" maxlength="500"
                 placeholder="What is this school actually about? e.g. bouldering and rock climbing"
                 style="width:100%;">${escHtml(school.user_description || '')}</textarea>` : ''}
-      <div style="display:flex;justify-content:flex-end;">
-        <button class="oracle-submit" onclick="saveSchoolEdit()">SAVE</button>
-      </div>
     </div>
     <div class="divider" style="margin:12px 0;"></div>
     <div class="oracle-section-label" style="margin-bottom:10px;">INCANTATIONS</div>
@@ -610,9 +607,9 @@ function renderDrawerEdit() {
         </div>
       </div>
     </div>
-    <div class="divider" style="margin:14px 0;"></div>
-    <div style="display:flex;justify-content:flex-end;">
-      <button class="consult-btn" onclick="exitDrawerEditMode()">DONE</button>
+    <div class="drawer-edit-footer">
+      ${school.is_custom ? `<button class="reset-btn" onclick="deleteSchool(${school.id})">BANISH SCHOOL</button>` : '<div></div>'}
+      <button class="oracle-submit" onclick="saveSchoolEdit()">SAVE</button>
     </div>`;
 }
 
@@ -645,7 +642,7 @@ async function saveSchoolEdit() {
   updateCardDOM(school);
   const card = document.getElementById(`card-${activeSchoolId}`);
   if (card) card.style.setProperty('--card-color', result.color + '50');
-  renderDrawerEdit();
+  exitDrawerEditMode();
   if (typeof renderOrrery === 'function') renderOrrery();
 }
 
