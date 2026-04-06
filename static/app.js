@@ -403,8 +403,11 @@ function openDrawer(schoolId) {
   const overlay = document.getElementById('drawer-overlay');
   overlay.classList.remove('hidden', 'closing');
   document.body.style.overflow = 'hidden';
+  // Reset scroll before rendering so drawer never opens mid-scroll on mobile
+  const drawer = document.getElementById('drawer');
+  if (drawer) drawer.scrollTop = 0;
   // Render after showing so the slide animation isn't blocked by innerHTML work
-  requestAnimationFrame(() => renderDrawer());
+  requestAnimationFrame(() => { renderDrawer(); if (drawer) drawer.scrollTop = 0; });
 }
 
 function closeDrawer() {
@@ -939,7 +942,7 @@ function renderMenuContent() {
   if (menuTab === 'chronicle') renderChronicle();
   else if (menuTab === 'orrery') renderOrrery();
   else if (menuTab === 'augur')  renderAugurTab();
-  else if (menuTab === 'account') renderAccountTab();
+  else if (menuTab === 'account') renderAccountTab(); // SANCTUM tab
 }
 
 // ── Chronicle ─────────────────────────────────────────────────────────────────

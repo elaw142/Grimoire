@@ -28,7 +28,7 @@
     <span></span><span></span><span></span>
   </button>
   <div class="header-inner">
-    <div class="header-eyebrow">CHARACTER SHEET</div>
+    <div class="header-eyebrow">ARCANE RECORD</div>
     <div class="header-name">{{ username }}</div>
     <div class="header-stats">
       <div class="header-stat">
@@ -123,12 +123,12 @@
       <button class="menu-tab active" data-tab="chronicle" onclick="setMenuTab('chronicle')">CHRONICLE</button>
       <button class="menu-tab" data-tab="orrery" onclick="setMenuTab('orrery')">ORRERY</button>
       <button class="menu-tab" data-tab="augur" onclick="setMenuTab('augur')">AUGUR</button>
-      <button class="menu-tab" data-tab="account" onclick="setMenuTab('account')">ACCOUNT</button>
+      <button class="menu-tab" data-tab="account" onclick="setMenuTab('account')">SANCTUM</button>
     </div>
     <div id="menu-content" class="menu-content"></div>
     <div class="menu-footer">
       <form id="logout-form" method="post" action="/logout" style="display:inline;">
-        <button class="reset-btn" type="button" onclick="confirmSignOut()">SIGN OUT</button>
+        <button class="reset-btn" type="button" onclick="confirmSignOut()">DEPART</button>
       </form>
     </div>
   </div>
@@ -191,6 +191,6 @@
   window.XP_PER_LEVEL = 100;
   window.RANKS        = {{ ranks | tojson }};
 </script>
-<script src="/static/app.js?v=21"></script>
+<script src="/static/app.js?v=22"></script>
 <script src="/static/particles.js"></script>
 {% endblock %}
