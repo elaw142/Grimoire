@@ -644,7 +644,8 @@ def api_augur_recalibrate():
 
     domain_examples = SCHOOL_HABIT_EXAMPLES.get(school['name'], '')
     if not domain_examples:
-        domain_examples = f'habits directly related to: {school["flavour"]}'
+        user_desc = (school.get('user_description') or '').strip()
+        domain_examples = user_desc if user_desc else f'habits directly related to: {school["flavour"]}'
 
     system = (
         'Augur: calibrate hero habits. '
@@ -832,10 +833,11 @@ def api_augur_school_confirm():
     ).fetchone()[0]
     color = CUSTOM_COLORS[custom_count % len(CUSTOM_COLORS)]
 
+    user_description = data.get('user_description', '').strip()[:500]
     now = datetime.utcnow().isoformat()
     cur = db.execute(
-        'INSERT INTO schools (user_id, name, flavour, is_custom, color, created_at) VALUES (?,?,?,1,?,?)',
-        (user_id, name[:50], flavour[:300], color, now),
+        'INSERT INTO schools (user_id, name, flavour, is_custom, color, created_at, user_description) VALUES (?,?,?,1,?,?,?)',
+        (user_id, name[:50], flavour[:300], color, now, user_description or None),
     )
     school_id = cur.lastrowid
 
@@ -1123,6 +1125,7 @@ def api_school_edit(school_id):
     data = request.get_json()
     name = (data.get('name') or '').strip()[:50]
     flavour = (data.get('flavour') or '').strip()[:300]
+    user_description = (data.get('user_description') or '').strip()[:500]
     color = (data.get('color') or '').strip()
     if not name:
         return jsonify({'error': 'Name required'}), 400
@@ -1136,12 +1139,15 @@ def api_school_edit(school_id):
     if not school:
         return jsonify({'error': 'Not found'}), 404
     if color:
-        db.execute('UPDATE schools SET name=?, flavour=?, color=? WHERE id=?', (name, flavour, color, school_id))
+        db.execute('UPDATE schools SET name=?, flavour=?, color=?, user_description=? WHERE id=?',
+                   (name, flavour, color, user_description or None, school_id))
     else:
-        db.execute('UPDATE schools SET name=?, flavour=? WHERE id=?', (name, flavour, school_id))
+        db.execute('UPDATE schools SET name=?, flavour=?, user_description=? WHERE id=?',
+                   (name, flavour, user_description or None, school_id))
     db.commit()
     effective_color = color or school['color']
-    return jsonify({'id': school_id, 'name': name, 'flavour': flavour, 'color': effective_color})
+    return jsonify({'id': school_id, 'name': name, 'flavour': flavour,
+                    'color': effective_color, 'user_description': user_description})
 
 
 @app.route('/api/school/<int:school_id>/spell', methods=['POST'])
@@ -1224,6 +1230,15 @@ except Exception:
 try:
     _mig = sqlite3.connect(DATABASE)
     _mig.execute("ALTER TABLE spells ADD COLUMN description TEXT NOT NULL DEFAULT ''")
+    _mig.commit()
+    _mig.close()
+except Exception:
+    pass
+
+# Migrate existing DBs that predate the schools.user_description column
+try:
+    _mig = sqlite3.connect(DATABASE)
+    _mig.execute("ALTER TABLE schools ADD COLUMN user_description TEXT")
     _mig.commit()
     _mig.close()
 except Exception:

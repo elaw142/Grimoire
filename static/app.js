@@ -578,6 +578,11 @@ function renderDrawerEdit() {
       </div>
       <textarea class="oracle-input" id="edit-school-flavour" rows="2" maxlength="300"
                 style="width:100%;">${escHtml(school.flavour)}</textarea>
+      ${school.is_custom ? `
+      <div style="font-family:'Cinzel',serif;font-size:10px;letter-spacing:2px;color:#7a6a50;margin-top:4px;">REAL-WORLD DOMAIN</div>
+      <textarea class="oracle-input" id="edit-school-description" rows="2" maxlength="500"
+                placeholder="What is this school actually about? e.g. bouldering and rock climbing"
+                style="width:100%;">${escHtml(school.user_description || '')}</textarea>` : ''}
       <div style="display:flex;justify-content:flex-end;">
         <button class="oracle-submit" onclick="saveSchoolEdit()">SAVE</button>
       </div>
@@ -623,14 +628,20 @@ function hideAddSpellForm() {
 }
 
 async function saveSchoolEdit() {
-  const name    = (document.getElementById('edit-school-name').value || '').trim();
-  const flavour = (document.getElementById('edit-school-flavour').value || '').trim();
-  const color   = document.getElementById('edit-school-color').value;
+  const name             = (document.getElementById('edit-school-name').value || '').trim();
+  const flavour          = (document.getElementById('edit-school-flavour').value || '').trim();
+  const color            = document.getElementById('edit-school-color').value;
+  const user_description = (document.getElementById('edit-school-description')?.value || '').trim();
   if (!name) return;
-  const result = await apiFetch(`/api/school/${activeSchoolId}`, { name, flavour, color }, 'PUT');
+  const result = await apiFetch(`/api/school/${activeSchoolId}`, { name, flavour, color, user_description }, 'PUT');
   if (result.error) { showError(result.error); return; }
   const school = getSchool(activeSchoolId);
-  if (school) { school.name = result.name; school.flavour = result.flavour; school.color = result.color; }
+  if (school) {
+    school.name = result.name;
+    school.flavour = result.flavour;
+    school.color = result.color;
+    school.user_description = result.user_description;
+  }
   updateCardDOM(school);
   const card = document.getElementById(`card-${activeSchoolId}`);
   if (card) card.style.setProperty('--card-color', result.color + '50');
@@ -1585,6 +1596,7 @@ async function confirmNewSchool() {
 
   const result = await apiFetch('/api/augur/school/confirm', {
     name, flavour, spells: augurState.discoverPreview.spells,
+    user_description: augurState.discoverDesc,
   });
 
   if (result.error || !result.school) {
