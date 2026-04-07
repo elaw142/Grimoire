@@ -1905,6 +1905,14 @@ a:hover { color: #e8d5a8; }
   grid-template-columns: 1fr 1fr;
   gap: 10px;
   margin-bottom: 16px;
+  justify-items: center;
+}
+.onboard-school-grid > .onboard-school-tile {
+  width: 100%;
+}
+.onboard-school-grid > .onboard-school-tile:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+  max-width: calc(50% - 5px);
 }
 .onboard-school-tile {
   border: 1px solid rgba(201,162,39,0.15);
@@ -1993,6 +2001,25 @@ a:hover { color: #e8d5a8; }
   animation: fadein 0.3s ease;
 }
 
+/* School header in review step */
+.onboard-school-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.onboard-school-header-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.onboard-school-header-name {
+  font-family: 'Cinzel', serif;
+  font-size: 16px;
+  letter-spacing: 2px;
+}
+
 /* Step 3 — review */
 .onboard-review-progress {
   font-family: 'Cinzel', serif;
@@ -2032,6 +2059,8 @@ a:hover { color: #e8d5a8; }
   padding: 0;
   resize: none;
   box-sizing: border-box;
+  overflow: hidden;
+  line-height: 1.4;
 }
 .onboard-spell-row textarea:focus { outline: none; }
 .onboard-spell-xp {

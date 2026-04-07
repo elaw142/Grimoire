@@ -1731,11 +1731,13 @@ let onboardState = null;
 function initOnboarding() {
   if (!window.NEEDS_ONBOARDING) return;
   onboardState = {
-    selected: {},      // { schoolName: true/false }
-    customs:  [],      // [{ name, user_description, color }]
-    results:  [],      // [{ name, flavour, color, is_custom, user_description, spells, streamText }]
-    reviewIdx: 0,
-    showCustomForm: false,
+    selected:      {},     // { schoolName: true/false }
+    customs:       [],     // [{ name, flavour, user_description, color }]
+    results:       [],     // [{ name, flavour, color, is_custom, user_description, spells, streamText }]
+    reviewIdx:     0,
+    customStage:   'hidden', // 'hidden' | 'input' | 'loading' | 'preview'
+    customInput:   '',
+    customPreview: null,   // { name, flavour }
   };
   for (const s of (window.DEFAULT_SCHOOLS || [])) {
     onboardState.selected[s.name] = true;
@@ -1768,17 +1770,37 @@ function renderOnboardingStep1() {
       <div class="onboard-school-tile-sub">${escHtml(c.user_description || '')}</div>
     </div>`).join('');
 
-  const customFormHtml = onboardState.showCustomForm
-    ? `<div class="onboard-custom-form">
-        <div style="font-family:'Cinzel',serif;font-size:10px;letter-spacing:2px;color:rgba(201,162,39,0.5);margin-bottom:10px;">CUSTOM SCHOOL</div>
-        <input id="onboard-custom-name" type="text" placeholder="School name (e.g. Bouldering)" maxlength="40" />
-        <textarea id="onboard-custom-desc" rows="2" placeholder="I want to... (e.g. improve at bouldering and reach V5)" maxlength="200"></textarea>
-        <div style="display:flex;justify-content:flex-end;gap:8px;">
-          <button class="consult-btn" onclick="cancelOnboardCustom()">CANCEL</button>
-          <button class="oracle-submit" onclick="addOnboardCustom()">ADD</button>
-        </div>
-      </div>`
-    : `<button class="consult-btn" onclick="showOnboardCustomForm()" style="width:100%;margin-bottom:16px;">+ ADD CUSTOM SCHOOL</button>`;
+  let customFormHtml = '';
+  if (onboardState.customStage === 'hidden') {
+    customFormHtml = `<button class="consult-btn" onclick="showOnboardCustomForm()" style="width:100%;margin-bottom:16px;">+ ADD CUSTOM SCHOOL</button>`;
+  } else if (onboardState.customStage === 'input') {
+    customFormHtml = `<div class="onboard-custom-form">
+      <div style="font-family:'Cinzel',serif;font-size:10px;letter-spacing:2px;color:rgba(201,162,39,0.5);margin-bottom:10px;">CUSTOM SCHOOL</div>
+      <textarea id="onboard-custom-desc" rows="3" placeholder="I want to... (e.g. improve at bouldering and reach V5)" maxlength="200">${escHtml(onboardState.customInput)}</textarea>
+      <div style="display:flex;justify-content:flex-end;gap:8px;">
+        <button class="consult-btn" onclick="cancelOnboardCustom()">CANCEL</button>
+        <button class="oracle-submit" onclick="doOnboardAugurDiscover()">&#10022; CONSULT THE AUGUR</button>
+      </div>
+    </div>`;
+  } else if (onboardState.customStage === 'loading') {
+    customFormHtml = `<div class="onboard-custom-form" style="text-align:center;">
+      <div style="font-family:'Cinzel',serif;font-size:10px;letter-spacing:2px;color:rgba(201,162,39,0.5);margin-bottom:12px;">THE AUGUR DELIBERATES</div>
+      <div class="ai-spinner" style="margin:0 auto 10px;"></div>
+      <div id="onboard-custom-stream-names"></div>
+    </div>`;
+  } else if (onboardState.customStage === 'preview' && onboardState.customPreview) {
+    const p = onboardState.customPreview;
+    const color = ONBOARD_CUSTOM_COLORS[onboardState.customs.length % ONBOARD_CUSTOM_COLORS.length];
+    customFormHtml = `<div class="onboard-custom-form">
+      <div style="font-family:'Cinzel',serif;font-size:10px;letter-spacing:2px;color:rgba(201,162,39,0.5);margin-bottom:10px;">SCHOOL REVEALED</div>
+      <div style="font-family:'Cinzel',serif;font-size:14px;color:${color};letter-spacing:1px;margin-bottom:6px;">${escHtml(p.name)}</div>
+      <div style="font-family:'Crimson Text',serif;font-size:13px;color:rgba(201,162,39,0.55);margin-bottom:12px;">${escHtml(p.flavour)}</div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;">
+        <button class="consult-btn" onclick="cancelOnboardCustom()">CANCEL</button>
+        <button class="oracle-submit" onclick="addOnboardCustom()">ADD THIS SCHOOL</button>
+      </div>
+    </div>`;
+  }
 
   const count = Object.values(onboardState.selected).filter(Boolean).length + onboardState.customs.length;
 
@@ -1803,12 +1825,15 @@ function toggleOnboardSchool(name) {
 }
 
 function showOnboardCustomForm() {
-  onboardState.showCustomForm = true;
+  onboardState.customStage = 'input';
+  onboardState.customInput = '';
   renderOnboardingStep1();
 }
 
 function cancelOnboardCustom() {
-  onboardState.showCustomForm = false;
+  onboardState.customStage = 'hidden';
+  onboardState.customInput = '';
+  onboardState.customPreview = null;
   renderOnboardingStep1();
 }
 
@@ -1817,19 +1842,79 @@ function removeOnboardCustom(idx) {
   renderOnboardingStep1();
 }
 
-function addOnboardCustom() {
-  const name = (document.getElementById('onboard-custom-name')?.value || '').trim();
+async function doOnboardAugurDiscover() {
   const desc = (document.getElementById('onboard-custom-desc')?.value || '').trim();
-  if (!name) return;
+  if (!desc) return;
+  onboardState.customInput = desc;
+  onboardState.customStage = 'loading';
+  renderOnboardingStep1();
+
+  let fullText = '';
+  try {
+    const resp = await fetch('/api/augur/school', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ description: desc }),
+    });
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data:')) continue;
+        const msg = JSON.parse(line.slice(5).trim());
+        if (msg.t) {
+          fullText += msg.t;
+          // Show partial spell names while streaming
+          const names = [];
+          const re = /"name"\s*:\s*"([^"]+)"/g;
+          let m;
+          while ((m = re.exec(fullText)) !== null) names.push(m[1]);
+          const el = document.getElementById('onboard-custom-stream-names');
+          if (el && names.length) {
+            el.innerHTML = names.slice(0, 1).map(n =>
+              `<div style="font-family:'Cinzel',serif;font-size:12px;color:rgba(201,162,39,0.6);margin:4px 0;">${escHtml(n)}</div>`
+            ).join('');
+          }
+        } else if (msg.done) {
+          onboardState.customPreview = { name: msg.name, flavour: msg.flavour };
+          onboardState.customStage = 'preview';
+          renderOnboardingStep1();
+          return;
+        } else if (msg.err) {
+          showError(msg.err);
+          onboardState.customStage = 'input';
+          renderOnboardingStep1();
+          return;
+        }
+      }
+    }
+  } catch (e) {
+    showError('The Augur could not conceive a school at this time.');
+    onboardState.customStage = 'input';
+    renderOnboardingStep1();
+  }
+}
+
+function addOnboardCustom() {
+  const p = onboardState.customPreview;
+  if (!p?.name) return;
   const color = ONBOARD_CUSTOM_COLORS[onboardState.customs.length % ONBOARD_CUSTOM_COLORS.length];
-  onboardState.customs.push({ name, user_description: desc, color });
-  onboardState.showCustomForm = false;
+  onboardState.customs.push({ name: p.name, flavour: p.flavour, user_description: onboardState.customInput, color });
+  onboardState.customStage = 'hidden';
+  onboardState.customInput = '';
+  onboardState.customPreview = null;
   renderOnboardingStep1();
 }
 
 async function skipOnboarding() {
   const result = await apiFetch('/api/onboard/skip', {});
-  if (!result.error) window.location.reload();
+  if (!result.error) onboardFadeReload();
 }
 
 async function startOnboarding() {
@@ -1840,7 +1925,7 @@ async function startOnboarding() {
     }
   }
   for (const c of onboardState.customs) {
-    schools.push({ name: c.name, flavour: c.user_description || c.name, color: c.color, is_custom: true, user_description: c.user_description });
+    schools.push({ name: c.name, flavour: c.flavour || c.user_description || c.name, color: c.color, is_custom: true, user_description: c.user_description });
   }
   if (!schools.length) return;
 
@@ -1928,21 +2013,24 @@ function renderOnboardingStep3() {
   const school = onboardState.results[onboardState.reviewIdx];
   const total  = onboardState.results.length;
   const isLast = onboardState.reviewIdx === total - 1;
+  const isFirst = onboardState.reviewIdx === 0;
 
   const spellRows = (school.spells || []).map((sp, si) => `
     <div class="onboard-spell-row">
       <input type="text" value="${escHtml(sp.name)}" maxlength="80"
              oninput="onboardUpdateSpell(${onboardState.reviewIdx},${si},'name',this.value)" />
-      <textarea rows="2" maxlength="120"
-                oninput="onboardUpdateSpell(${onboardState.reviewIdx},${si},'description',this.value)">${escHtml(sp.description || '')}</textarea>
+      <textarea maxlength="120"
+                oninput="onboardUpdateSpell(${onboardState.reviewIdx},${si},'description',this.value);onboardAutoResize(this)"
+                >${escHtml(sp.description || '')}</textarea>
       <div class="onboard-spell-xp">${sp.xp} XP</div>
     </div>`).join('');
 
   panel.innerHTML = `
     <div class="onboarding-eyebrow">REVIEW YOUR INCANTATIONS</div>
     <div class="onboard-review-progress">SCHOOL ${onboardState.reviewIdx + 1} OF ${total}</div>
-    <div style="margin-bottom:16px;">
-      <span class="rank-badge" style="color:${school.color};border-color:${school.color}60;background:${school.color}15;">${escHtml(school.name)}</span>
+    <div class="onboard-school-header" style="--school-color:${school.color};">
+      <div class="onboard-school-header-dot" style="background:${school.color};box-shadow:0 0 8px ${school.color}80;"></div>
+      <div class="onboard-school-header-name" style="color:${school.color};">${escHtml(school.name)}</div>
     </div>
     <div style="font-family:'Crimson Text',serif;font-size:13px;color:rgba(201,162,39,0.5);margin-bottom:14px;">
       Edit names and descriptions as you see fit.
@@ -1952,14 +2040,18 @@ function renderOnboardingStep3() {
       Everything can be changed later.
     </div>
     <div class="onboarding-actions">
-      ${onboardState.reviewIdx > 0
-        ? `<button class="consult-btn" onclick="onboardReviewPrev()">BACK</button>`
-        : `<div></div>`}
+      <button class="consult-btn" onclick="${isFirst ? 'renderOnboardingStep1()' : 'onboardReviewPrev()'}">BACK</button>
       <button class="oracle-submit" onclick="${isLast ? 'finishOnboarding()' : 'onboardReviewNext()'}">${isLast ? 'BEGIN' : 'NEXT'}</button>
     </div>`;
 
-  // Reset panel scroll to top when switching schools
   panel.scrollTop = 0;
+  // Auto-resize all textareas after render
+  panel.querySelectorAll('textarea').forEach(ta => onboardAutoResize(ta));
+}
+
+function onboardAutoResize(ta) {
+  ta.style.height = 'auto';
+  ta.style.height = ta.scrollHeight + 'px';
 }
 
 function onboardUpdateSpell(schoolIdx, spellIdx, field, value) {
@@ -1989,9 +2081,16 @@ async function finishOnboarding() {
 
   const result = await apiFetch('/api/onboard/commit', { schools: payload });
   if (result.error) { showError(result.error); return; }
+  onboardFadeReload();
+}
 
-  document.getElementById('onboarding-overlay').classList.add('hidden');
-  window.location.reload();
+function onboardFadeReload() {
+  const fade = document.createElement('div');
+  fade.style.cssText = 'position:fixed;inset:0;background:#0a0806;z-index:9999;opacity:0;transition:opacity 0.5s ease;pointer-events:all;';
+  document.body.appendChild(fade);
+  // double rAF ensures transition fires
+  requestAnimationFrame(() => requestAnimationFrame(() => { fade.style.opacity = '1'; }));
+  setTimeout(() => window.location.reload(), 560);
 }
 
 // Kick off onboarding if needed
