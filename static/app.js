@@ -1917,24 +1917,19 @@ async function startOnboarding() {
   renderOnboardingStep2();
 
   const es = new EventSource('/api/onboard/stream');
-  let currentIdx = 0;
 
   es.onmessage = (e) => {
     const msg = JSON.parse(e.data);
     if (msg.school_start !== undefined) {
-      currentIdx = msg.school_start.idx;
-      const total = onboardState.results.length;
-      const sub = document.getElementById('onboard-stream-sub');
-      if (sub) sub.textContent = `School ${currentIdx + 1} of ${total} — forging incantations\u2026`;
-      // Reveal this school row
-      const row = document.getElementById(`onboard-stream-${currentIdx}`);
-      if (row) { row.style.display = ''; row.classList.add('active'); }
+      const idx = msg.school_start.idx;
+      const row = document.getElementById(`onboard-stream-${idx}`);
+      if (row) row.classList.add('active');
       // Update name in case backend named it (edge case fallback)
-      const nameEl = document.getElementById(`onboard-stream-name-${currentIdx}`);
+      const nameEl = document.getElementById(`onboard-stream-name-${idx}`);
       if (nameEl && msg.school_start.name) nameEl.textContent = msg.school_start.name;
     } else if (msg.t !== undefined) {
-      const idx = msg.idx !== undefined ? msg.idx : currentIdx;
-      if (onboardState.results[idx] !== undefined) {
+      const idx = msg.idx;
+      if (idx !== undefined && onboardState.results[idx] !== undefined) {
         onboardState.results[idx].streamText += msg.t;
         const names = extractOnboardSpellNames(onboardState.results[idx].streamText);
         appendOnboardStreamSpells(idx, names);
@@ -1952,9 +1947,11 @@ async function startOnboarding() {
       onboardState.reviewIdx = 0;
       renderOnboardingStep3();
     } else if (msg.err) {
-      const idx = msg.idx !== undefined ? msg.idx : currentIdx;
-      const el = document.getElementById(`onboard-stream-spells-${idx}`);
-      if (el) el.innerHTML = `<div style="color:#c45a5a;font-family:'Crimson Text',serif;font-size:12px;">${escHtml(msg.err)}</div>`;
+      const idx = msg.idx;
+      if (idx !== undefined) {
+        const el = document.getElementById(`onboard-stream-spells-${idx}`);
+        if (el) el.innerHTML = `<div style="color:#c45a5a;font-family:'Crimson Text',serif;font-size:12px;">${escHtml(msg.err)}</div>`;
+      }
     }
   };
 
@@ -2002,7 +1999,7 @@ function renderOnboardingWaiting() {
 function renderOnboardingStep2() {
   const panel = document.querySelector('.onboarding-panel');
   const rows = onboardState.results.map((s, idx) => `
-    <div class="onboard-stream-school" id="onboard-stream-${idx}" style="display:none;">
+    <div class="onboard-stream-school" id="onboard-stream-${idx}">
       <div class="onboard-stream-school-name" style="color:${s.color};">
         <span id="onboard-stream-name-${idx}">${escHtml(s.name || '...')}</span>
       </div>
@@ -2012,7 +2009,7 @@ function renderOnboardingStep2() {
   panel.innerHTML = `
     <div class="onboarding-eyebrow">THE AUGUR SPEAKS</div>
     <div class="onboarding-title">FORGING INCANTATIONS</div>
-    <div class="onboarding-sub" id="onboard-stream-sub">Preparing your first incantations&hellip;</div>
+    <div class="onboarding-sub" id="onboard-stream-sub">Forging all incantations\u2026</div>
     ${rows}`;
 }
 

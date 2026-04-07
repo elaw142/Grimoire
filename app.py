@@ -2,7 +2,9 @@ import sqlite3
 import json
 import logging
 import os
+import queue as _queue
 import re
+import threading
 from datetime import datetime, timedelta
 from functools import wraps
 from flask import Flask, render_template, request, session, redirect, url_for, jsonify, g, Response, stream_with_context
@@ -491,78 +493,99 @@ def api_onboard_stream():
         'XP 10-50 by effort. No markdown.'
     )
 
+    event_q = _queue.SimpleQueue()
+
+    def gen_school(idx, school):
+        name = school.get('name', '')
+        flavour = school.get('flavour', '')
+        user_desc = (school.get('user_description') or '').strip()
+        is_custom = school.get('is_custom', False)
+        color = school.get('color', '#c9a227')
+
+        # Custom schools should arrive named from the client; fall back to description
+        if is_custom and not name:
+            name = (school.get('plain_name') or user_desc)[:40]
+            flavour = user_desc
+
+        domain_examples = SCHOOL_HABIT_EXAMPLES.get(name, '')
+        if not domain_examples:
+            domain_examples = user_desc if user_desc else f'habits related to: {flavour}'
+
+        user_msg = f'School: {name}, domain: {flavour}.\nExamples: {domain_examples}\n'
+        if user_desc and is_custom:
+            user_msg += f'User goal: {user_desc}\n'
+        user_msg += 'New user setup. Generate starter habits.'
+
+        full_prompt = f'{system}\n\n{user_msg}'
+
+        event_q.put(json.dumps({"school_start": {"name": name, "color": color, "idx": idx}}))
+
+        full_text = ''
+        try:
+            resp = requests.post(OLLAMA_URL, json={
+                'model': OLLAMA_MODEL,
+                'prompt': full_prompt,
+                'stream': True,
+                'format': 'json',
+                'options': {'temperature': 0.4, 'num_predict': 320, 'num_ctx': 1024},
+            }, stream=True, timeout=120)
+            resp.raise_for_status()
+            for line in resp.iter_lines():
+                if not line:
+                    continue
+                chunk = json.loads(line)
+                token = chunk.get('response', '')
+                full_text += token
+                event_q.put(json.dumps({"t": token, "idx": idx}))
+                if chunk.get('done'):
+                    break
+        except Exception as e:
+            log.warning('onboard stream error (school %s): %s', name, e)
+            event_q.put(json.dumps({"err": f"Could not generate spells for {name}.", "idx": idx}))
+            event_q.put(None)
+            return
+
+        try:
+            raw = re.sub(r'```(?:json)?', '', full_text).strip('` \n')
+            # If JSON was truncated, try to close it before parsing
+            if raw and not raw.rstrip().endswith('}'):
+                raw = raw.rstrip().rstrip(',') + ']}'
+            result = json.loads(raw)
+            spells = []
+            for sp in result.get('spells', [])[:5]:
+                if 'name' in sp and 'xp' in sp:
+                    spells.append({
+                        'name': str(sp['name'])[:80],
+                        'description': str(sp.get('description', ''))[:120],
+                        'xp': max(10, min(50, int(sp['xp']))),
+                    })
+            if spells:
+                event_q.put(json.dumps({"school_end": {"idx": idx, "spells": spells}}))
+            else:
+                event_q.put(json.dumps({"err": f"No valid spells for {name}.", "idx": idx}))
+        except Exception as e:
+            log.warning('onboard parse error (school %s): %s | raw: %.200s', name, e, full_text)
+            event_q.put(json.dumps({"err": f"Could not parse spells for {name}.", "idx": idx}))
+
+        event_q.put(None)  # sentinel: this school finished
+
     @stream_with_context
     def generate():
+        # Launch all schools in parallel threads
         for idx, school in enumerate(schools):
-            name = school.get('name', '')
-            flavour = school.get('flavour', '')
-            user_desc = (school.get('user_description') or '').strip()
-            is_custom = school.get('is_custom', False)
-            color = school.get('color', '#c9a227')
+            t = threading.Thread(target=gen_school, args=(idx, school), daemon=True)
+            t.start()
 
-            # Custom schools should arrive named from the client; fall back to description
-            if is_custom and not name:
-                name = (school.get('plain_name') or user_desc)[:40]
-                flavour = user_desc
-
-            domain_examples = SCHOOL_HABIT_EXAMPLES.get(name, '')
-            if not domain_examples:
-                domain_examples = user_desc if user_desc else f'habits related to: {flavour}'
-
-            user_msg = f'School: {name}, domain: {flavour}.\nExamples: {domain_examples}\n'
-            if user_desc and is_custom:
-                user_msg += f'User goal: {user_desc}\n'
-            user_msg += 'New user setup. Generate starter habits.'
-
-            full_prompt = f'{system}\n\n{user_msg}'
-
-            yield f'data: {json.dumps({"school_start": {"name": name, "color": color, "idx": idx}})}\n\n'
-
-            full_text = ''
+        done = 0
+        while done < len(schools):
             try:
-                resp = requests.post(OLLAMA_URL, json={
-                    'model': OLLAMA_MODEL,
-                    'prompt': full_prompt,
-                    'stream': True,
-                    'format': 'json',
-                    'options': {'temperature': 0.4, 'num_predict': 700, 'num_ctx': 2048},
-                }, stream=True, timeout=120)
-                resp.raise_for_status()
-                for line in resp.iter_lines():
-                    if not line:
-                        continue
-                    chunk = json.loads(line)
-                    token = chunk.get('response', '')
-                    full_text += token
-                    yield f'data: {json.dumps({"t": token, "idx": idx})}\n\n'
-                    if chunk.get('done'):
-                        break
-            except Exception as e:
-                log.warning('onboard stream error (school %s): %s', name, e)
-                yield f'data: {json.dumps({"err": f"Could not generate spells for {name}.", "idx": idx})}\n\n'
-                continue
-
-            try:
-                raw = re.sub(r'```(?:json)?', '', full_text).strip('` \n')
-                # If JSON was truncated, try to close it before parsing
-                if raw and not raw.rstrip().endswith('}'):
-                    raw = raw.rstrip().rstrip(',') + ']}'
-                result = json.loads(raw)
-                spells = []
-                for sp in result.get('spells', [])[:5]:
-                    if 'name' in sp and 'xp' in sp:
-                        spells.append({
-                            'name': str(sp['name'])[:80],
-                            'description': str(sp.get('description', ''))[:120],
-                            'xp': max(10, min(50, int(sp['xp']))),
-                        })
-                if spells:
-                    yield f'data: {json.dumps({"school_end": {"idx": idx, "spells": spells}})}\n\n'
+                item = event_q.get(timeout=130)
+                if item is None:
+                    done += 1
                 else:
-                    yield f'data: {json.dumps({"err": f"No valid spells for {name}.", "idx": idx})}\n\n'
-            except Exception as e:
-                log.warning('onboard parse error (school %s): %s | raw: %.200s', name, e, full_text)
-                yield f'data: {json.dumps({"err": f"Could not parse spells for {name}.", "idx": idx})}\n\n'
+                    yield f'data: {item}\n\n'
+            except Exception:
+                break
 
         yield f'data: {json.dumps({"all_done": True})}\n\n'
 
@@ -798,7 +821,7 @@ def _generate_recal_spells(school, context, db, user_id):
         user_msg += f'Seeker\'s guidance: "{context}"\n'
     user_msg += 'Vary habits to avoid repeating overused ones.'
 
-    result = call_augur(system, user_msg, num_predict=550, temperature=0.4)
+    result = call_augur(system, user_msg, num_predict=320, temperature=0.4)
     if not result or 'spells' not in result or not result['spells']:
         return None
 
@@ -892,7 +915,7 @@ def api_augur_recalibrate():
                 'prompt': full_prompt,
                 'stream': True,
                 'format': 'json',
-                'options': {'temperature': 0.4, 'num_predict': 550, 'num_ctx': 2048},
+                'options': {'temperature': 0.4, 'num_predict': 320, 'num_ctx': 1024},
             }, stream=True, timeout=90)
             resp.raise_for_status()
             for line in resp.iter_lines():
@@ -992,7 +1015,7 @@ def api_augur_school():
                 'prompt': full_prompt,
                 'stream': True,
                 'format': 'json',
-                'options': {'temperature': 0.5, 'num_predict': 500, 'num_ctx': 1024},
+                'options': {'temperature': 0.5, 'num_predict': 380, 'num_ctx': 1024},
             }, stream=True, timeout=90)
             resp.raise_for_status()
             for line in resp.iter_lines():
