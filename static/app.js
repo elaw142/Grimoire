@@ -1721,3 +1721,278 @@ document.addEventListener('keydown', e => {
   if (menuOpen) closeMenu();
   else if (!document.getElementById('drawer-overlay').classList.contains('hidden')) closeDrawer();
 });
+
+// ── Onboarding ────────────────────────────────────────────────────────────────
+
+const ONBOARD_CUSTOM_COLORS = ['#e09b5a','#a87bc4','#5abeaa','#e0c45a','#c45a5a','#5a8fe0'];
+
+let onboardState = null;
+
+function initOnboarding() {
+  if (!window.NEEDS_ONBOARDING) return;
+  onboardState = {
+    selected: {},      // { schoolName: true/false }
+    customs:  [],      // [{ name, user_description, color }]
+    results:  [],      // [{ name, flavour, color, is_custom, user_description, spells, streamText }]
+    reviewIdx: 0,
+    showCustomForm: false,
+  };
+  for (const s of (window.DEFAULT_SCHOOLS || [])) {
+    onboardState.selected[s.name] = true;
+  }
+  document.getElementById('onboarding-overlay').classList.remove('hidden');
+  renderOnboardingStep1();
+}
+
+function renderOnboardingStep1() {
+  const panel = document.querySelector('.onboarding-panel');
+
+  const defaultTiles = (window.DEFAULT_SCHOOLS || []).map(s => {
+    const sel = onboardState.selected[s.name];
+    return `<div class="onboard-school-tile${sel ? ' selected' : ''}"
+                 style="${sel ? `border-color:${s.color}55;` : ''}"
+                 onclick="toggleOnboardSchool('${escHtml(s.name)}')">
+      <div class="onboard-school-tile-check">&#10003;</div>
+      <div class="onboard-school-tile-name" style="color:${s.color};">${escHtml(s.name)}</div>
+      <div class="onboard-school-tile-sub">${escHtml(s.flavour.split('\u2014')[0].split('.')[0].trim())}</div>
+    </div>`;
+  }).join('');
+
+  const customTiles = onboardState.customs.map((c, i) => `
+    <div class="onboard-school-tile selected" style="border-color:${c.color}55;">
+      <div class="onboard-school-tile-check" style="color:${c.color};border-color:${c.color};">&#10003;</div>
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+        <div class="onboard-school-tile-name" style="color:${c.color};">${escHtml(c.name)}</div>
+        <button onclick="removeOnboardCustom(${i})" style="background:none;border:none;color:rgba(201,162,39,0.4);cursor:pointer;font-size:16px;padding:0;line-height:1;">&times;</button>
+      </div>
+      <div class="onboard-school-tile-sub">${escHtml(c.user_description || '')}</div>
+    </div>`).join('');
+
+  const customFormHtml = onboardState.showCustomForm
+    ? `<div class="onboard-custom-form">
+        <div style="font-family:'Cinzel',serif;font-size:10px;letter-spacing:2px;color:rgba(201,162,39,0.5);margin-bottom:10px;">CUSTOM SCHOOL</div>
+        <input id="onboard-custom-name" type="text" placeholder="School name (e.g. Bouldering)" maxlength="40" />
+        <textarea id="onboard-custom-desc" rows="2" placeholder="I want to... (e.g. improve at bouldering and reach V5)" maxlength="200"></textarea>
+        <div style="display:flex;justify-content:flex-end;gap:8px;">
+          <button class="consult-btn" onclick="cancelOnboardCustom()">CANCEL</button>
+          <button class="oracle-submit" onclick="addOnboardCustom()">ADD</button>
+        </div>
+      </div>`
+    : `<button class="consult-btn" onclick="showOnboardCustomForm()" style="width:100%;margin-bottom:16px;">+ ADD CUSTOM SCHOOL</button>`;
+
+  const count = Object.values(onboardState.selected).filter(Boolean).length + onboardState.customs.length;
+
+  panel.innerHTML = `
+    <div class="onboarding-eyebrow">THE GRIMOIRE AWAKENS</div>
+    <div class="onboarding-title">CHOOSE YOUR SCHOOLS</div>
+    <div class="onboarding-sub">Select the paths you wish to walk. The Augur will forge your first incantations.</div>
+    <div class="onboard-school-grid">${defaultTiles}${customTiles}</div>
+    ${customFormHtml}
+    <div style="font-family:'Crimson Text',serif;font-size:12px;color:rgba(201,162,39,0.3);text-align:center;margin-bottom:4px;">
+      All schools and spells can be changed at any time.
+    </div>
+    <div class="onboarding-actions">
+      <button class="consult-btn" onclick="skipOnboarding()">SKIP</button>
+      <button class="oracle-submit" onclick="startOnboarding()"${count === 0 ? ' disabled' : ''}>SUMMON THE AUGUR</button>
+    </div>`;
+}
+
+function toggleOnboardSchool(name) {
+  onboardState.selected[name] = !onboardState.selected[name];
+  renderOnboardingStep1();
+}
+
+function showOnboardCustomForm() {
+  onboardState.showCustomForm = true;
+  renderOnboardingStep1();
+}
+
+function cancelOnboardCustom() {
+  onboardState.showCustomForm = false;
+  renderOnboardingStep1();
+}
+
+function removeOnboardCustom(idx) {
+  onboardState.customs.splice(idx, 1);
+  renderOnboardingStep1();
+}
+
+function addOnboardCustom() {
+  const name = (document.getElementById('onboard-custom-name')?.value || '').trim();
+  const desc = (document.getElementById('onboard-custom-desc')?.value || '').trim();
+  if (!name) return;
+  const color = ONBOARD_CUSTOM_COLORS[onboardState.customs.length % ONBOARD_CUSTOM_COLORS.length];
+  onboardState.customs.push({ name, user_description: desc, color });
+  onboardState.showCustomForm = false;
+  renderOnboardingStep1();
+}
+
+async function skipOnboarding() {
+  const result = await apiFetch('/api/onboard/skip', {});
+  if (!result.error) window.location.reload();
+}
+
+async function startOnboarding() {
+  const schools = [];
+  for (const s of (window.DEFAULT_SCHOOLS || [])) {
+    if (onboardState.selected[s.name]) {
+      schools.push({ name: s.name, flavour: s.flavour, color: s.color, is_custom: false, user_description: '' });
+    }
+  }
+  for (const c of onboardState.customs) {
+    schools.push({ name: c.name, flavour: c.user_description || c.name, color: c.color, is_custom: true, user_description: c.user_description });
+  }
+  if (!schools.length) return;
+
+  const prep = await apiFetch('/api/onboard/prepare', { schools });
+  if (prep.error) { showError(prep.error); return; }
+
+  onboardState.results = schools.map(s => ({ ...s, spells: [], streamText: '' }));
+  renderOnboardingStep2();
+
+  const es = new EventSource('/api/onboard/stream');
+  let currentIdx = 0;
+
+  es.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    if (msg.school_start !== undefined) {
+      currentIdx = msg.school_start.idx;
+    } else if (msg.t !== undefined) {
+      const idx = msg.idx !== undefined ? msg.idx : currentIdx;
+      if (onboardState.results[idx] !== undefined) {
+        onboardState.results[idx].streamText += msg.t;
+        const names = extractOnboardSpellNames(onboardState.results[idx].streamText);
+        appendOnboardStreamSpells(idx, names);
+      }
+    } else if (msg.school_end !== undefined) {
+      const idx = msg.school_end.idx;
+      if (onboardState.results[idx] !== undefined) {
+        onboardState.results[idx].spells = msg.school_end.spells;
+        const el = document.getElementById(`onboard-stream-${idx}`);
+        if (el) el.style.opacity = '0.6';
+      }
+    } else if (msg.all_done) {
+      es.close();
+      onboardState.reviewIdx = 0;
+      renderOnboardingStep3();
+    } else if (msg.err) {
+      const idx = msg.idx !== undefined ? msg.idx : currentIdx;
+      const el = document.getElementById(`onboard-stream-spells-${idx}`);
+      if (el) el.innerHTML = `<div style="color:#c45a5a;font-family:'Crimson Text',serif;font-size:12px;">${escHtml(msg.err)}</div>`;
+    }
+  };
+
+  es.onerror = () => {
+    es.close();
+    showError('The Augur faltered during onboarding. Please try again.');
+  };
+}
+
+function extractOnboardSpellNames(text) {
+  const names = [];
+  const re = /"name"\s*:\s*"([^"]+)"/g;
+  let m;
+  while ((m = re.exec(text)) !== null) names.push(m[1]);
+  return names;
+}
+
+function appendOnboardStreamSpells(idx, names) {
+  const el = document.getElementById(`onboard-stream-spells-${idx}`);
+  if (!el) return;
+  const existing = el.querySelectorAll('.onboard-stream-spell').length;
+  for (let i = existing; i < names.length; i++) {
+    const div = document.createElement('div');
+    div.className = 'onboard-stream-spell';
+    div.textContent = names[i];
+    el.appendChild(div);
+  }
+}
+
+function renderOnboardingStep2() {
+  const panel = document.querySelector('.onboarding-panel');
+  const rows = onboardState.results.map((s, idx) => `
+    <div class="onboard-stream-school" id="onboard-stream-${idx}">
+      <div class="onboard-stream-school-name" style="color:${s.color};">${escHtml(s.name)}</div>
+      <div id="onboard-stream-spells-${idx}"></div>
+    </div>`).join('');
+
+  panel.innerHTML = `
+    <div class="onboarding-eyebrow">THE AUGUR SPEAKS</div>
+    <div class="onboarding-title">FORGING INCANTATIONS</div>
+    <div class="onboarding-sub">Your first spells are being woven&hellip;</div>
+    ${rows}`;
+}
+
+function renderOnboardingStep3() {
+  const panel = document.querySelector('.onboarding-panel');
+  const school = onboardState.results[onboardState.reviewIdx];
+  const total  = onboardState.results.length;
+  const isLast = onboardState.reviewIdx === total - 1;
+
+  const spellRows = (school.spells || []).map((sp, si) => `
+    <div class="onboard-spell-row">
+      <input type="text" value="${escHtml(sp.name)}" maxlength="80"
+             oninput="onboardUpdateSpell(${onboardState.reviewIdx},${si},'name',this.value)" />
+      <textarea rows="2" maxlength="120"
+                oninput="onboardUpdateSpell(${onboardState.reviewIdx},${si},'description',this.value)">${escHtml(sp.description || '')}</textarea>
+      <div class="onboard-spell-xp">${sp.xp} XP</div>
+    </div>`).join('');
+
+  panel.innerHTML = `
+    <div class="onboarding-eyebrow">REVIEW YOUR INCANTATIONS</div>
+    <div class="onboard-review-progress">SCHOOL ${onboardState.reviewIdx + 1} OF ${total}</div>
+    <div style="margin-bottom:16px;">
+      <span class="rank-badge" style="color:${school.color};border-color:${school.color}60;background:${school.color}15;">${escHtml(school.name)}</span>
+    </div>
+    <div style="font-family:'Crimson Text',serif;font-size:13px;color:rgba(201,162,39,0.5);margin-bottom:14px;">
+      Edit names and descriptions as you see fit.
+    </div>
+    ${spellRows}
+    <div style="font-family:'Crimson Text',serif;font-size:12px;color:rgba(201,162,39,0.3);text-align:center;margin:14px 0 4px;">
+      Everything can be changed later.
+    </div>
+    <div class="onboarding-actions">
+      ${onboardState.reviewIdx > 0
+        ? `<button class="consult-btn" onclick="onboardReviewPrev()">BACK</button>`
+        : `<div></div>`}
+      <button class="oracle-submit" onclick="${isLast ? 'finishOnboarding()' : 'onboardReviewNext()'}">${isLast ? 'BEGIN' : 'NEXT'}</button>
+    </div>`;
+
+  // Reset panel scroll to top when switching schools
+  panel.scrollTop = 0;
+}
+
+function onboardUpdateSpell(schoolIdx, spellIdx, field, value) {
+  const sp = onboardState.results[schoolIdx]?.spells[spellIdx];
+  if (sp) sp[field] = value;
+}
+
+function onboardReviewNext() {
+  onboardState.reviewIdx++;
+  renderOnboardingStep3();
+}
+
+function onboardReviewPrev() {
+  onboardState.reviewIdx--;
+  renderOnboardingStep3();
+}
+
+async function finishOnboarding() {
+  const payload = onboardState.results.map(s => ({
+    name: s.name,
+    flavour: s.flavour,
+    color: s.color,
+    is_custom: s.is_custom,
+    user_description: s.user_description || '',
+    spells: s.spells,
+  }));
+
+  const result = await apiFetch('/api/onboard/commit', { schools: payload });
+  if (result.error) { showError(result.error); return; }
+
+  document.getElementById('onboarding-overlay').classList.add('hidden');
+  window.location.reload();
+}
+
+// Kick off onboarding if needed
+initOnboarding();

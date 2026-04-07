@@ -173,6 +173,11 @@
   </div>
 </div>
 
+<!-- Onboarding overlay -->
+<div id="onboarding-overlay" class="onboarding-overlay hidden">
+  <div class="onboarding-panel"></div>
+</div>
+
 <!-- Floating XP -->
 <div id="floating-xp" class="floating-xp hidden"></div>
 
@@ -186,11 +191,13 @@
 </div>
 
 <script>
-  window.GRIMOIRE_DATA = {{ schools_json | safe }};
-  window.DEED_LOG     = {{ deed_log_json | safe }};
-  window.XP_PER_LEVEL = 100;
-  window.RANKS        = {{ ranks | tojson }};
+  window.GRIMOIRE_DATA      = {{ schools_json | safe }};
+  window.DEED_LOG           = {{ deed_log_json | safe }};
+  window.XP_PER_LEVEL       = 100;
+  window.RANKS              = {{ ranks | tojson }};
+  window.NEEDS_ONBOARDING   = {{ 'true' if needs_onboarding else 'false' }};
+  window.DEFAULT_SCHOOLS    = {{ default_schools_json | safe }};
 </script>
-<script src="/static/app.js?v=22"></script>
+<script src="/static/app.js?v=23"></script>
 <script src="/static/particles.js"></script>
 {% endblock %}

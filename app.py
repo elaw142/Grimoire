@@ -398,7 +398,6 @@ def signup():
                 )
                 user_id = cur.lastrowid
                 db.commit()
-                provision_user_schools(user_id, db)
                 session['user_id'] = user_id
                 session['username'] = username
                 return redirect(url_for('index'))
@@ -451,6 +450,166 @@ def api_change_password():
     return jsonify({'ok': True})
 
 
+# ── Onboarding routes ─────────────────────────────────────────────────────────
+
+@app.route('/api/onboard/skip', methods=['POST'])
+@require_login_api
+def api_onboard_skip():
+    user_id = session['user_id']
+    db = get_db()
+    provision_user_schools(user_id, db)
+    db.execute('UPDATE users SET onboarded=1 WHERE id=?', (user_id,))
+    db.commit()
+    return jsonify({'ok': True})
+
+
+@app.route('/api/onboard/prepare', methods=['POST'])
+@require_login_api
+def api_onboard_prepare():
+    data = request.get_json()
+    schools = data.get('schools', [])
+    if not isinstance(schools, list) or not schools:
+        return jsonify({'error': 'No schools provided'}), 400
+    session['onboarding_schools'] = schools
+    return jsonify({'ok': True})
+
+
+@app.route('/api/onboard/stream')
+@require_login_api
+def api_onboard_stream():
+    schools = session.get('onboarding_schools', [])
+    if not schools:
+        return jsonify({'error': 'No onboarding data. Call /api/onboard/prepare first.'}), 400
+
+    system = (
+        'Augur: calibrate hero habits. '
+        'JSON only: {"spells":[{"name":"string","description":"string","xp":number}]}. '
+        '4-5 spells, logged after completion. '
+        'R1: concrete real-world habits — never fantasy imagery or metaphors. '
+        'R2: description = one plain sentence (e.g. "Walk 8000 steps"). '
+        'R3: name = 2-4 word fantasy title only (e.g. "Rite of Iron"). '
+        'XP 10-50 by effort. No markdown.'
+    )
+
+    @stream_with_context
+    def generate():
+        for idx, school in enumerate(schools):
+            name = school.get('name', '')
+            flavour = school.get('flavour', '')
+            user_desc = (school.get('user_description') or '').strip()
+            is_custom = school.get('is_custom', False)
+
+            domain_examples = SCHOOL_HABIT_EXAMPLES.get(name, '')
+            if not domain_examples:
+                domain_examples = user_desc if user_desc else f'habits related to: {flavour}'
+
+            user_msg = f'School: {name}, domain: {flavour}.\nExamples: {domain_examples}\n'
+            if user_desc and is_custom:
+                user_msg += f'User goal: {user_desc}\n'
+            user_msg += 'New user setup. Generate starter habits.'
+
+            full_prompt = f'{system}\n\n{user_msg}'
+
+            yield f'data: {json.dumps({"school_start": {"name": name, "color": school.get("color", "#c9a227"), "idx": idx}})}\n\n'
+
+            full_text = ''
+            try:
+                resp = requests.post(OLLAMA_URL, json={
+                    'model': OLLAMA_MODEL,
+                    'prompt': full_prompt,
+                    'stream': True,
+                    'format': 'json',
+                    'options': {'temperature': 0.4, 'num_predict': 550, 'num_ctx': 2048},
+                }, stream=True, timeout=90)
+                resp.raise_for_status()
+                for line in resp.iter_lines():
+                    if not line:
+                        continue
+                    chunk = json.loads(line)
+                    token = chunk.get('response', '')
+                    full_text += token
+                    yield f'data: {json.dumps({"t": token, "idx": idx})}\n\n'
+                    if chunk.get('done'):
+                        break
+            except Exception as e:
+                log.warning('onboard stream error (school %s): %s', name, e)
+                yield f'data: {json.dumps({"err": f"Could not generate spells for {name}.", "idx": idx})}\n\n'
+                continue
+
+            try:
+                raw = re.sub(r'```(?:json)?', '', full_text).strip('` \n')
+                result = json.loads(raw)
+                spells = []
+                for sp in result.get('spells', [])[:5]:
+                    if 'name' in sp and 'xp' in sp:
+                        spells.append({
+                            'name': str(sp['name'])[:80],
+                            'description': str(sp.get('description', ''))[:120],
+                            'xp': max(10, min(50, int(sp['xp']))),
+                        })
+                if spells:
+                    yield f'data: {json.dumps({"school_end": {"idx": idx, "spells": spells}})}\n\n'
+                else:
+                    yield f'data: {json.dumps({"err": f"No valid spells for {name}.", "idx": idx})}\n\n'
+            except Exception as e:
+                log.warning('onboard parse error (school %s): %s | raw: %.200s', name, e, full_text)
+                yield f'data: {json.dumps({"err": f"Could not parse spells for {name}.", "idx": idx})}\n\n'
+
+        yield f'data: {json.dumps({"all_done": True})}\n\n'
+
+    return Response(generate(), mimetype='text/event-stream',
+                    headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})
+
+
+@app.route('/api/onboard/commit', methods=['POST'])
+@require_login_api
+def api_onboard_commit():
+    user_id = session['user_id']
+    data = request.get_json()
+    schools = data.get('schools', [])
+
+    db = get_db()
+    now = datetime.utcnow().isoformat()
+
+    for sd in schools:
+        name = (sd.get('name') or '').strip()
+        flavour = (sd.get('flavour') or '').strip()
+        color = sd.get('color') or '#c9a227'
+        is_custom = 1 if sd.get('is_custom') else 0
+        user_description = sd.get('user_description') or ''
+        spells = sd.get('spells') or []
+
+        if not name or not flavour:
+            continue
+
+        cur = db.execute(
+            'INSERT INTO schools (user_id, name, flavour, is_custom, color, user_description, created_at) '
+            'VALUES (?,?,?,?,?,?,?)',
+            (user_id, name, flavour, is_custom, color, user_description, now),
+        )
+        school_id = cur.lastrowid
+
+        for sp in spells[:5]:
+            sp_name = str(sp.get('name') or '')[:80].strip()
+            sp_desc = str(sp.get('description') or '')[:120].strip()
+            sp_xp = max(10, min(50, int(sp.get('xp') or 20)))
+            if sp_name:
+                db.execute(
+                    'INSERT INTO spells (school_id, name, description, xp) VALUES (?,?,?,?)',
+                    (school_id, sp_name, sp_desc, sp_xp),
+                )
+
+        db.execute(
+            'INSERT OR REPLACE INTO user_xp (user_id, school_id, xp) VALUES (?,?,0)',
+            (user_id, school_id),
+        )
+
+    db.execute('UPDATE users SET onboarded=1 WHERE id=?', (user_id,))
+    session.pop('onboarding_schools', None)
+    db.commit()
+    return jsonify({'ok': True})
+
+
 # ── Main page ─────────────────────────────────────────────────────────────────
 
 @app.route('/')
@@ -471,8 +630,14 @@ def index():
     avg_level = round(sum(s['level'] for s in schools) / len(schools)) if schools else 1
     overall_rank = get_rank(avg_level)
 
-    user_row = db.execute('SELECT ai_title FROM users WHERE id=?', (user_id,)).fetchone()
+    user_row = db.execute('SELECT ai_title, onboarded FROM users WHERE id=?', (user_id,)).fetchone()
     ai_title = user_row['ai_title'] if user_row and user_row['ai_title'] else compute_title(schools)
+    needs_onboarding = not bool(user_row['onboarded']) if user_row else False
+
+    default_schools_json = json.dumps([
+        {'name': s['name'], 'flavour': s['flavour'], 'color': s['color']}
+        for s in DEFAULT_SCHOOLS
+    ])
 
     return render_template(
         'index.html',
@@ -484,6 +649,8 @@ def index():
         ranks=RANKS,
         schools_json=json.dumps(schools),
         deed_log_json=json.dumps(deed_log),
+        needs_onboarding=needs_onboarding,
+        default_schools_json=default_schools_json,
     )
 
 
@@ -1279,6 +1446,18 @@ except Exception:
 try:
     _mig = sqlite3.connect(DATABASE)
     _mig.execute("ALTER TABLE schools ADD COLUMN user_description TEXT")
+    _mig.commit()
+    _mig.close()
+except Exception:
+    pass
+
+# Migrate existing DBs: add onboarded flag; mark users who already have schools as done
+try:
+    _mig = sqlite3.connect(DATABASE)
+    _mig.execute("ALTER TABLE users ADD COLUMN onboarded INTEGER NOT NULL DEFAULT 0")
+    _mig.execute(
+        "UPDATE users SET onboarded=1 WHERE id IN (SELECT DISTINCT user_id FROM schools)"
+    )
     _mig.commit()
     _mig.close()
 except Exception:
