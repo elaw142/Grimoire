@@ -491,13 +491,6 @@ def api_onboard_stream():
         'XP 10-50 by effort. No markdown.'
     )
 
-    naming_system = (
-        'You are the Augur — a dark fantasy sage who names schools of arcane practice. '
-        'Return ONLY valid JSON: {"name":"string","flavour":"string"}. '
-        'School name: 1-2 evocative dark fantasy words (e.g. Umbramancy, Ironveil). '
-        'Flavour: 1 concise sentence describing the real-world domain. No purple prose.'
-    )
-
     @stream_with_context
     def generate():
         for idx, school in enumerate(schools):
@@ -507,21 +500,10 @@ def api_onboard_stream():
             is_custom = school.get('is_custom', False)
             color = school.get('color', '#c9a227')
 
-            # For custom schools with no name, have the Augur generate one first
-            plain_name = (school.get('plain_name') or '').strip()
-
+            # Custom schools should arrive named from the client; fall back to description
             if is_custom and not name:
-                yield f'data: {json.dumps({"naming_start": {"idx": idx}})}\n\n'
-                naming_context = f'"{plain_name}" — {user_desc}' if plain_name else f'"{user_desc}"'
-                naming_msg = f'The seeker wishes to cultivate: {naming_context}\nName this school.'
-                naming_result = call_augur(naming_system, naming_msg, num_predict=80, num_ctx=512)
-                if naming_result and 'name' in naming_result:
-                    name = str(naming_result.get('name', ''))[:50]
-                    flavour = str(naming_result.get('flavour', user_desc))[:200]
-                else:
-                    name = user_desc[:40]
-                    flavour = user_desc
-                yield f'data: {json.dumps({"naming_done": {"idx": idx, "name": name, "flavour": flavour}})}\n\n'
+                name = (school.get('plain_name') or user_desc)[:40]
+                flavour = user_desc
 
             domain_examples = SCHOOL_HABIT_EXAMPLES.get(name, '')
             if not domain_examples:
@@ -543,8 +525,8 @@ def api_onboard_stream():
                     'prompt': full_prompt,
                     'stream': True,
                     'format': 'json',
-                    'options': {'temperature': 0.4, 'num_predict': 550, 'num_ctx': 2048},
-                }, stream=True, timeout=90)
+                    'options': {'temperature': 0.4, 'num_predict': 700, 'num_ctx': 2048},
+                }, stream=True, timeout=120)
                 resp.raise_for_status()
                 for line in resp.iter_lines():
                     if not line:
@@ -562,6 +544,9 @@ def api_onboard_stream():
 
             try:
                 raw = re.sub(r'```(?:json)?', '', full_text).strip('` \n')
+                # If JSON was truncated, try to close it before parsing
+                if raw and not raw.rstrip().endswith('}'):
+                    raw = raw.rstrip().rstrip(',') + ']}'
                 result = json.loads(raw)
                 spells = []
                 for sp in result.get('spells', [])[:5]:

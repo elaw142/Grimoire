@@ -1731,6 +1731,7 @@ let onboardState = null;
 function initOnboarding() {
   if (!window.NEEDS_ONBOARDING) return;
   onboardState = {
+    step:          1,      // 1 | 'waiting' | 2 | 3
     selected:      {},     // { schoolName: true/false }
     customs:       [],     // [{ plain_name, user_description, color, selected, name, flavour, _promise }]
     results:       [],
@@ -1866,18 +1867,19 @@ async function fetchOnboardSchoolName(custom) {
         if (!line.startsWith('data:')) continue;
         const msg = JSON.parse(line.slice(5).trim());
         if (msg.done) {
-          custom.name   = msg.name;
+          custom.name    = msg.name;
           custom.flavour = msg.flavour;
-          if (!onboardState.showCustomForm) renderOnboardingStep1();
+          // Only re-render step 1 tile if still on school selection
+          if (onboardState.step === 1 && !onboardState.showCustomForm) renderOnboardingStep1();
           return;
         }
         if (msg.err) throw new Error(msg.err);
       }
     }
   } catch (e) {
-    custom.name   = custom.plain_name || custom.user_description.slice(0, 30);
+    custom.name    = custom.plain_name || custom.user_description.slice(0, 30);
     custom.flavour = custom.user_description;
-    if (!onboardState.showCustomForm) renderOnboardingStep1();
+    if (onboardState.step === 1 && !onboardState.showCustomForm) renderOnboardingStep1();
   }
 }
 
@@ -1891,6 +1893,7 @@ async function startOnboarding() {
   const selectedCustoms = onboardState.customs.filter(c => c.selected !== false);
   const stillNaming = selectedCustoms.filter(c => !c.name && c._promise);
   if (stillNaming.length) {
+    onboardState.step = 'waiting';
     renderOnboardingWaiting();
     await Promise.all(stillNaming.map(c => c._promise));
   }
@@ -1909,6 +1912,7 @@ async function startOnboarding() {
   const prep = await apiFetch('/api/onboard/prepare', { schools });
   if (prep.error) { showError(prep.error); return; }
 
+  onboardState.step = 2;
   onboardState.results = schools.map(s => ({ ...s, spells: [], streamText: '' }));
   renderOnboardingStep2();
 
@@ -1917,24 +1921,17 @@ async function startOnboarding() {
 
   es.onmessage = (e) => {
     const msg = JSON.parse(e.data);
-    if (msg.naming_start !== undefined) {
-      const idx = msg.naming_start.idx;
-      const nameEl = document.getElementById(`onboard-stream-name-${idx}`);
-      if (nameEl) nameEl.textContent = '...';
-      const row = document.getElementById(`onboard-stream-${idx}`);
-      if (row) row.classList.add('active');
-    } else if (msg.naming_done !== undefined) {
-      const idx = msg.naming_done.idx;
-      if (onboardState.results[idx] !== undefined) {
-        onboardState.results[idx].name   = msg.naming_done.name;
-        onboardState.results[idx].flavour = msg.naming_done.flavour;
-      }
-      const nameEl = document.getElementById(`onboard-stream-name-${idx}`);
-      if (nameEl) nameEl.textContent = msg.naming_done.name;
-    } else if (msg.school_start !== undefined) {
+    if (msg.school_start !== undefined) {
       currentIdx = msg.school_start.idx;
+      const total = onboardState.results.length;
+      const sub = document.getElementById('onboard-stream-sub');
+      if (sub) sub.textContent = `School ${currentIdx + 1} of ${total} — forging incantations\u2026`;
+      // Reveal this school row
       const row = document.getElementById(`onboard-stream-${currentIdx}`);
-      if (row) row.classList.add('active');
+      if (row) { row.style.display = ''; row.classList.add('active'); }
+      // Update name in case backend named it (edge case fallback)
+      const nameEl = document.getElementById(`onboard-stream-name-${currentIdx}`);
+      if (nameEl && msg.school_start.name) nameEl.textContent = msg.school_start.name;
     } else if (msg.t !== undefined) {
       const idx = msg.idx !== undefined ? msg.idx : currentIdx;
       if (onboardState.results[idx] !== undefined) {
@@ -1951,6 +1948,7 @@ async function startOnboarding() {
       }
     } else if (msg.all_done) {
       es.close();
+      onboardState.step = 3;
       onboardState.reviewIdx = 0;
       renderOnboardingStep3();
     } else if (msg.err) {
@@ -1988,17 +1986,23 @@ function appendOnboardStreamSpells(idx, names) {
 
 function renderOnboardingWaiting() {
   const panel = document.querySelector('.onboarding-panel');
+  const customNames = onboardState.customs
+    .filter(c => c.selected !== false)
+    .map(c => c.plain_name || c.user_description.slice(0, 30))
+    .join(', ');
   panel.innerHTML = `
-    <div class="onboarding-eyebrow">ONE MOMENT</div>
-    <div class="onboarding-title">THE AUGUR DELIBERATES</div>
-    <div class="onboarding-sub">Naming your custom schools&hellip;</div>
+    <div class="onboarding-eyebrow">THE AUGUR DELIBERATES</div>
+    <div class="onboarding-title">NAMING YOUR SCHOOLS</div>
+    <div class="onboarding-sub">The Augur peers into the nature of your pursuits and forges their arcane names&hellip;<br><br>
+      <span style="font-style:italic;color:rgba(201,162,39,0.4);">${escHtml(customNames)}</span>
+    </div>
     <div class="ai-spinner" style="margin:24px auto;"></div>`;
 }
 
 function renderOnboardingStep2() {
   const panel = document.querySelector('.onboarding-panel');
   const rows = onboardState.results.map((s, idx) => `
-    <div class="onboard-stream-school" id="onboard-stream-${idx}">
+    <div class="onboard-stream-school" id="onboard-stream-${idx}" style="display:none;">
       <div class="onboard-stream-school-name" style="color:${s.color};">
         <span id="onboard-stream-name-${idx}">${escHtml(s.name || '...')}</span>
       </div>
@@ -2008,7 +2012,7 @@ function renderOnboardingStep2() {
   panel.innerHTML = `
     <div class="onboarding-eyebrow">THE AUGUR SPEAKS</div>
     <div class="onboarding-title">FORGING INCANTATIONS</div>
-    <div class="onboarding-sub">Your first spells are being woven&hellip;</div>
+    <div class="onboarding-sub" id="onboard-stream-sub">Preparing your first incantations&hellip;</div>
     ${rows}`;
 }
 
