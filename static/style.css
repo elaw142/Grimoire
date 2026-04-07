@@ -1986,7 +1986,14 @@ a:hover { color: #e8d5a8; }
 .onboard-custom-form textarea:focus { outline: none; border-color: rgba(201,162,39,0.4); }
 
 /* Step 2 — stream */
-.onboard-stream-school { margin-bottom: 18px; }
+.onboard-stream-school { margin-bottom: 18px; transition: opacity 0.4s ease; }
+.onboard-stream-school.active {
+  animation: onboardPulse 1.4s ease-in-out infinite;
+}
+@keyframes onboardPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
 .onboard-stream-school-name {
   font-family: 'Cinzel', serif;
   font-size: 11px;

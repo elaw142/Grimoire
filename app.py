@@ -491,6 +491,13 @@ def api_onboard_stream():
         'XP 10-50 by effort. No markdown.'
     )
 
+    naming_system = (
+        'You are the Augur — a dark fantasy sage who names schools of arcane practice. '
+        'Return ONLY valid JSON: {"name":"string","flavour":"string"}. '
+        'School name: 1-2 evocative dark fantasy words (e.g. Umbramancy, Ironveil). '
+        'Flavour: 1 concise sentence describing the real-world domain. No purple prose.'
+    )
+
     @stream_with_context
     def generate():
         for idx, school in enumerate(schools):
@@ -498,6 +505,23 @@ def api_onboard_stream():
             flavour = school.get('flavour', '')
             user_desc = (school.get('user_description') or '').strip()
             is_custom = school.get('is_custom', False)
+            color = school.get('color', '#c9a227')
+
+            # For custom schools with no name, have the Augur generate one first
+            plain_name = (school.get('plain_name') or '').strip()
+
+            if is_custom and not name:
+                yield f'data: {json.dumps({"naming_start": {"idx": idx}})}\n\n'
+                naming_context = f'"{plain_name}" — {user_desc}' if plain_name else f'"{user_desc}"'
+                naming_msg = f'The seeker wishes to cultivate: {naming_context}\nName this school.'
+                naming_result = call_augur(naming_system, naming_msg, num_predict=80, num_ctx=512)
+                if naming_result and 'name' in naming_result:
+                    name = str(naming_result.get('name', ''))[:50]
+                    flavour = str(naming_result.get('flavour', user_desc))[:200]
+                else:
+                    name = user_desc[:40]
+                    flavour = user_desc
+                yield f'data: {json.dumps({"naming_done": {"idx": idx, "name": name, "flavour": flavour}})}\n\n'
 
             domain_examples = SCHOOL_HABIT_EXAMPLES.get(name, '')
             if not domain_examples:
@@ -510,7 +534,7 @@ def api_onboard_stream():
 
             full_prompt = f'{system}\n\n{user_msg}'
 
-            yield f'data: {json.dumps({"school_start": {"name": name, "color": school.get("color", "#c9a227"), "idx": idx}})}\n\n'
+            yield f'data: {json.dumps({"school_start": {"name": name, "color": color, "idx": idx}})}\n\n'
 
             full_text = ''
             try:
