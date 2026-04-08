@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import queue as _queue
+import random
 import re
 import threading
 from datetime import datetime, timedelta
@@ -593,48 +594,134 @@ def api_onboard_stream():
                     headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})
 
 
+@app.route('/api/ai/naming-status')
+@require_login_api
+def api_ai_naming_status():
+    """Return current names + naming_pending for all user schools and spells."""
+    user_id = session['user_id']
+    db = get_db()
+    rows = db.execute(
+        'SELECT id, name, flavour, naming_pending FROM schools WHERE user_id=? ORDER BY id ASC',
+        (user_id,),
+    ).fetchall()
+    result = []
+    for row in rows:
+        s = dict(row)
+        spells = db.execute(
+            'SELECT id, name, naming_pending FROM spells WHERE school_id=? ORDER BY id ASC',
+            (s['id'],),
+        ).fetchall()
+        s['spells'] = [dict(sp) for sp in spells]
+        result.append(s)
+    return jsonify({'schools': result})
+
+
 @app.route('/api/onboard/commit', methods=['POST'])
 @require_login_api
 def api_onboard_commit():
     user_id = session['user_id']
     data = request.get_json()
-    schools = data.get('schools', [])
+    schools_data = data.get('schools', [])
 
+    default_lookup = {s['name']: s for s in DEFAULT_SCHOOLS}
     db = get_db()
     now = datetime.utcnow().isoformat()
 
-    for sd in schools:
-        name = (sd.get('name') or '').strip()
-        flavour = (sd.get('flavour') or '').strip()
+    for sd in schools_data:
+        is_custom = bool(sd.get('is_custom'))
         color = sd.get('color') or '#c9a227'
-        is_custom = 1 if sd.get('is_custom') else 0
-        user_description = sd.get('user_description') or ''
-        spells = sd.get('spells') or []
+        user_description = (sd.get('user_description') or '').strip()
 
-        if not name or not flavour:
-            continue
+        if is_custom:
+            plain_name = (sd.get('plain_name') or sd.get('name') or '').strip()
+            habits = sd.get('habits') or []  # [{'description': str, 'xp': int}]
+            school_name = plain_name or 'Unnamed School'
+            flavour = user_description or 'An unnamed domain of arcane practice.'
 
-        cur = db.execute(
-            'INSERT INTO schools (user_id, name, flavour, is_custom, color, user_description, created_at) '
-            'VALUES (?,?,?,?,?,?,?)',
-            (user_id, name, flavour, is_custom, color, user_description, now),
-        )
-        school_id = cur.lastrowid
+            cur = db.execute(
+                'INSERT INTO schools (user_id, name, flavour, is_custom, color, user_description, created_at, naming_pending) '
+                'VALUES (?,?,?,1,?,?,?,1)',
+                (user_id, school_name, flavour, color, user_description, now),
+            )
+            school_id = cur.lastrowid
 
-        for sp in spells[:5]:
-            sp_name = str(sp.get('name') or '')[:80].strip()
-            sp_desc = str(sp.get('description') or '')[:120].strip()
-            sp_xp = max(10, min(50, int(sp.get('xp') or 20)))
-            if sp_name:
-                db.execute(
-                    'INSERT INTO spells (school_id, name, description, xp) VALUES (?,?,?,?)',
-                    (school_id, sp_name, sp_desc, sp_xp),
+            spell_ids = []
+            habit_descriptions = []
+            for i, h in enumerate(habits[:5]):
+                desc = str(h.get('description') or '').strip()[:120]
+                if not desc:
+                    continue
+                xp = max(10, min(50, int(h.get('xp') or 20)))
+                placeholder = PLACEHOLDER_SPELL_NAMES[i % len(PLACEHOLDER_SPELL_NAMES)]
+                cur2 = db.execute(
+                    'INSERT INTO spells (school_id, name, description, xp, naming_pending) VALUES (?,?,?,?,1)',
+                    (school_id, placeholder, desc, xp),
                 )
+                spell_ids.append(cur2.lastrowid)
+                habit_descriptions.append(desc)
 
-        db.execute(
-            'INSERT OR REPLACE INTO user_xp (user_id, school_id, xp) VALUES (?,?,0)',
-            (user_id, school_id),
-        )
+            db.execute('INSERT OR REPLACE INTO user_xp (user_id, school_id, xp) VALUES (?,?,0)', (user_id, school_id))
+
+            # Trigger background naming (school name + flavour + spell names in one AI call)
+            if habit_descriptions:
+                desc_for_ai = f'{plain_name} — {user_description}' if plain_name else user_description
+                t = threading.Thread(
+                    target=_name_custom_school_bg,
+                    args=(DATABASE, school_id, desc_for_ai, habit_descriptions, spell_ids),
+                    daemon=True,
+                )
+                t.start()
+
+        else:
+            # Default school: use hardcoded spell data — no AI needed
+            name = (sd.get('name') or '').strip()
+            default = default_lookup.get(name)
+            if not default:
+                continue
+
+            display_name = (sd.get('display_name') or '').strip() or default['name']
+
+            cur = db.execute(
+                'INSERT INTO schools (user_id, name, flavour, is_custom, color, user_description, created_at, naming_pending) '
+                'VALUES (?,?,?,0,?,?,?,0)',
+                (user_id, display_name, default['flavour'], color, '', now),
+            )
+            school_id = cur.lastrowid
+
+            # Use client-provided spell list (user may have added/removed spells during review)
+            client_spells = sd.get('spells')
+            if client_spells is not None:
+                pending_spells = []
+                for sp in client_spells:
+                    sp_name = str(sp.get('name') or '').strip()
+                    sp_desc = str(sp.get('description') or '').strip()[:120]
+                    sp_xp = max(10, min(50, int(sp.get('xp') or 20)))
+                    sp_pending = 1 if sp.get('naming_pending') else 0
+                    if not sp_name:
+                        sp_name = random.choice(PLACEHOLDER_SPELL_NAMES)
+                        sp_pending = 1
+                    cur2 = db.execute(
+                        'INSERT INTO spells (school_id, name, description, xp, naming_pending) VALUES (?,?,?,?,?)',
+                        (school_id, sp_name, sp_desc, sp_xp, sp_pending),
+                    )
+                    if sp_pending:
+                        pending_spells.append((cur2.lastrowid, sp_desc))
+                # Trigger background naming for any pending spells
+                for spell_id, sp_desc in pending_spells:
+                    t = threading.Thread(
+                        target=_name_spell_bg,
+                        args=(DATABASE, spell_id, display_name, sp_desc),
+                        daemon=True,
+                    )
+                    t.start()
+            else:
+                for sp in default.get('spells', []):
+                    db.execute(
+                        'INSERT INTO spells (school_id, name, description, xp, naming_pending) VALUES (?,?,?,?,0)',
+                        (school_id, sp['name'], sp['description'], sp['xp']),
+                    )
+
+            db.execute('INSERT OR REPLACE INTO user_xp (user_id, school_id, xp) VALUES (?,?,0)', (user_id, school_id))
 
     db.execute('UPDATE users SET onboarded=1 WHERE id=?', (user_id,))
     session.pop('onboarding_schools', None)
@@ -667,9 +754,15 @@ def index():
     needs_onboarding = not bool(user_row['onboarded']) if user_row else False
 
     default_schools_json = json.dumps([
-        {'name': s['name'], 'flavour': s['flavour'], 'color': s['color']}
+        {'name': s['name'], 'flavour': s['flavour'], 'color': s['color'], 'spells': s.get('spells', [])}
         for s in DEFAULT_SCHOOLS
     ])
+
+    # Convert SCHOOL_HABIT_EXAMPLES to JSON-serialisable form {name: [{desc, xp}]}
+    habit_examples_json = json.dumps({
+        name: [{'description': d, 'xp': xp} for d, xp in pairs]
+        for name, pairs in SCHOOL_HABIT_EXAMPLES.items()
+    })
 
     return render_template(
         'index.html',
@@ -683,6 +776,7 @@ def index():
         deed_log_json=json.dumps(deed_log),
         needs_onboarding=needs_onboarding,
         default_schools_json=default_schools_json,
+        habit_examples_json=habit_examples_json,
     )
 
 
@@ -770,12 +864,106 @@ def api_augur_accept():
 
 
 SCHOOL_HABIT_EXAMPLES = {
-    'Restoration': '"Sleep 7-9 hours", "Drink 2 litres of water", "Eat fruits and vegetables", "Cook a healthy meal", "Take a nap", "Follow a sleep schedule"',
-    'Transmutation': '"Complete a full workout", "Go for a 5km run", "Walk 8000 steps", "Do 20 minutes of stretching", "Complete 50 push-ups", "Cycle for 30 minutes"',
-    'Divination': '"Meditate for 10 minutes", "Write in a journal for 10 minutes", "Spend 30 minutes in nature", "Practice 5 minutes of breathwork", "Do a gratitude list", "Spend time in silence"',
-    'Artifice': '"Complete a 1-hour deep work session", "Read for 30 minutes", "Learn one new thing", "Finish a key task", "Study for 45 minutes", "Write 500 words"',
-    'Enchantment': '"Have a meaningful conversation", "Reach out to a friend", "Spend quality time with someone", "Do something kind for another person", "Attend a social event", "Write a letter or message to someone"',
+    'Restoration': [
+        ('Sleep 7-9 hours', 30), ('Drink 2 litres of water', 20), ('Eat fruits and vegetables', 20),
+        ('Cook a healthy meal', 25), ('Take a nap', 15), ('Follow a sleep schedule', 25),
+    ],
+    'Transmutation': [
+        ('Complete a full workout', 35), ('Go for a 5km run', 30), ('Walk 8000 steps', 20),
+        ('Do 20 minutes of stretching', 15), ('Complete 50 push-ups', 20), ('Cycle for 30 minutes', 25),
+    ],
+    'Divination': [
+        ('Meditate for 10 minutes', 25), ('Write in a journal for 10 minutes', 20),
+        ('Spend 30 minutes in nature', 20), ('Practice 5 minutes of breathwork', 15),
+        ('Do a gratitude list', 15), ('Spend time in silence', 20),
+    ],
+    'Artifice': [
+        ('Complete a 1-hour deep work session', 30), ('Read for 30 minutes', 20),
+        ('Learn one new thing', 25), ('Finish a key task', 20),
+        ('Study for 45 minutes', 25), ('Write 500 words', 25),
+    ],
+    'Enchantment': [
+        ('Have a meaningful conversation', 25), ('Reach out to a friend', 20),
+        ('Spend quality time with someone', 25), ('Do something kind for another person', 15),
+        ('Attend a social event', 25), ('Write a letter or message to someone', 20),
+    ],
 }
+
+PLACEHOLDER_SPELL_NAMES = [
+    'Unnamed Rite', 'Unspoken Hex', 'Shrouded Oath',
+    'Nameless Vigil', 'Formless Pact', 'Void Incantation',
+    'Bound Unknown', 'Silent Mark',
+]
+
+
+def _name_custom_school_bg(db_path, school_id, description, habit_descriptions, spell_ids):
+    """Background thread: AI generates school name, flavour, and spell names."""
+    system = (
+        'You are the Augur. Return ONLY valid JSON with no markdown. '
+        '{"school_name":"string","flavour":"string","spell_names":["string",...]}. '
+        'school_name: 1-2 evocative dark fantasy words (e.g. Umbramancy, Ironveil, Sanguine). '
+        'flavour: 1 concise sentence describing the domain. No purple prose. '
+        'spell_names: one 2-4 word fantasy incantation title per habit, same order as given. '
+        'Examples: "Rite of Iron", "Somnium Vitae", "Hydor", "Lexis Arcanum". No markdown.'
+    )
+    habit_list = '\n'.join(f'{i + 1}. {h}' for i, h in enumerate(habit_descriptions))
+    user_msg = f'User goal / domain: {description}\nHabits to name:\n{habit_list}'
+
+    result = call_augur(system, user_msg, num_predict=200, temperature=0.4)
+    if not result:
+        log.warning('_name_custom_school_bg: AI returned nothing for school %s', school_id)
+        return
+
+    school_name = str(result.get('school_name', '')).strip()[:50]
+    flavour = str(result.get('flavour', '')).strip()[:300]
+    spell_names = result.get('spell_names', [])
+
+    if not school_name:
+        return
+
+    try:
+        con = sqlite3.connect(db_path)
+        con.execute(
+            'UPDATE schools SET name=?, flavour=?, naming_pending=0 WHERE id=?',
+            (school_name, flavour, school_id),
+        )
+        for spell_id, name in zip(spell_ids, spell_names):
+            name = str(name).strip()[:80]
+            if name:
+                con.execute(
+                    'UPDATE spells SET name=?, naming_pending=0 WHERE id=?',
+                    (name, spell_id),
+                )
+        con.commit()
+        con.close()
+        log.info('_name_custom_school_bg: named school %s as "%s"', school_id, school_name)
+    except Exception as e:
+        log.warning('_name_custom_school_bg DB error: %s', e)
+
+
+def _name_spell_bg(db_path, spell_id, school_context, description):
+    """Background thread: AI generates a fantasy name for a single spell."""
+    system = (
+        'You are the Augur. Return ONLY valid JSON: {"name":"string"}. '
+        '2-4 word dark fantasy incantation title for the given real-world habit. '
+        'Examples: "Rite of Iron", "Somnium Vitae", "Hydor", "Lexis Arcanum". No markdown.'
+    )
+    user_msg = f'School: {school_context}\nHabit: {description}'
+    result = call_augur(system, user_msg, num_predict=30, temperature=0.4)
+    if not result:
+        return
+
+    name = str(result.get('name', '')).strip()[:80]
+    if not name:
+        return
+
+    try:
+        con = sqlite3.connect(db_path)
+        con.execute('UPDATE spells SET name=?, naming_pending=0 WHERE id=?', (name, spell_id))
+        con.commit()
+        con.close()
+    except Exception as e:
+        log.warning('_name_spell_bg DB error: %s', e)
 
 
 def _generate_recal_spells(school, context, db, user_id):
@@ -1397,20 +1585,46 @@ def api_spell_add(school_id):
     name = (data.get('name') or '').strip()[:80]
     description = (data.get('description') or '').strip()[:120]
     xp = max(10, min(50, int(data.get('xp') or 20)))
-    if not name:
-        return jsonify({'error': 'Name required'}), 400
+
+    if not description:
+        return jsonify({'error': 'Description required'}), 400
+
     db = get_db()
     school = db.execute(
         'SELECT * FROM schools WHERE id=? AND user_id=?', (school_id, user_id)
     ).fetchone()
     if not school:
         return jsonify({'error': 'Not found'}), 404
+
+    naming_pending = 0
+    if not name:
+        existing_count = db.execute(
+            'SELECT COUNT(*) FROM spells WHERE school_id=?', (school_id,)
+        ).fetchone()[0]
+        name = PLACEHOLDER_SPELL_NAMES[existing_count % len(PLACEHOLDER_SPELL_NAMES)]
+        naming_pending = 1
+
     cur = db.execute(
-        'INSERT INTO spells (school_id, name, description, xp) VALUES (?,?,?,?)',
-        (school_id, name, description, xp),
+        'INSERT INTO spells (school_id, name, description, xp, naming_pending) VALUES (?,?,?,?,?)',
+        (school_id, name, description, xp, naming_pending),
     )
     db.commit()
-    return jsonify({'id': cur.lastrowid, 'name': name, 'description': description, 'xp': xp, 'school_id': school_id})
+    spell_id = cur.lastrowid
+
+    if naming_pending:
+        school = dict(school)
+        school_context = f'{school["name"]} — {school["flavour"]}'
+        t = threading.Thread(
+            target=_name_spell_bg,
+            args=(DATABASE, spell_id, school_context, description),
+            daemon=True,
+        )
+        t.start()
+
+    return jsonify({
+        'id': spell_id, 'name': name, 'description': description,
+        'xp': xp, 'school_id': school_id, 'naming_pending': naming_pending,
+    })
 
 
 @app.route('/api/spell/<int:spell_id>', methods=['PUT'])
@@ -1490,6 +1704,23 @@ try:
     _mig.execute(
         "UPDATE users SET onboarded=1 WHERE id IN (SELECT DISTINCT user_id FROM schools)"
     )
+    _mig.commit()
+    _mig.close()
+except Exception:
+    pass
+
+# Migrate existing DBs: add naming_pending flag for background AI naming
+try:
+    _mig = sqlite3.connect(DATABASE)
+    _mig.execute("ALTER TABLE spells ADD COLUMN naming_pending INTEGER NOT NULL DEFAULT 0")
+    _mig.commit()
+    _mig.close()
+except Exception:
+    pass
+
+try:
+    _mig = sqlite3.connect(DATABASE)
+    _mig.execute("ALTER TABLE schools ADD COLUMN naming_pending INTEGER NOT NULL DEFAULT 0")
     _mig.commit()
     _mig.close()
 except Exception:

@@ -134,23 +134,14 @@
   </div>
 </div>
 
-<!-- Recalibration accept/deny panel (auto level-up flow only) -->
+<!-- Rank-up notification panel -->
 <div id="recal-panel" class="recal-panel hidden">
   <div class="recal-panel-inner">
     <div class="recal-panel-eyebrow">RANK ATTAINED</div>
     <div class="recal-panel-school" id="recal-panel-school"></div>
-    <div id="recal-panel-loading">
-      <div class="recal-panel-sub recal-flavour-text" id="recal-flavour-text">The Augur stirs&hellip;</div>
-      <div class="recal-panel-spinner"><div class="ai-spinner"></div></div>
-      <div id="recal-stream-preview" class="augur-stream-preview" style="margin-top:10px;"></div>
-    </div>
-    <div id="recal-panel-results" style="display:none;">
-      <div class="recal-panel-sub">New incantations have been forged. Accept or deny.</div>
-      <div class="recal-panel-spells" id="recal-panel-spells"></div>
-      <div class="recal-panel-actions">
-        <button class="consult-btn" onclick="dismissRecal()">DENY</button>
-        <button class="oracle-submit" onclick="acceptRecal()">ACCEPT</button>
-      </div>
+    <div class="recal-panel-sub">Visit the Augur's Chamber to add or refine your incantations.</div>
+    <div class="recal-panel-actions">
+      <button class="oracle-submit" onclick="dismissRecal()">DISMISS</button>
     </div>
   </div>
 </div>
@@ -197,7 +188,8 @@
   window.RANKS              = {{ ranks | tojson }};
   window.NEEDS_ONBOARDING   = {{ 'true' if needs_onboarding else 'false' }};
   window.DEFAULT_SCHOOLS    = {{ default_schools_json | safe }};
+  window.HABIT_EXAMPLES     = {{ habit_examples_json | safe }};
 </script>
-<script src="/static/app.js?v=29"></script>
+<script src="/static/app.js?v=32"></script>
 <script src="/static/particles.js"></script>
 {% endblock %}

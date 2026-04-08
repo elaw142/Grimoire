@@ -27,8 +27,7 @@ let milestonesData = null;        // cached milestones from API
 // Augur tab state
 let augurState = {
   mode:           null,    // null | 'recalibrate' | 'discover'
-  recalLoading:   false,
-  recalResult:    null,   // { schoolName, spells }
+  recalSchoolId:  null,   // currently selected school in recalibrate section
   discoverStage:  'input', // 'input' | 'loading' | 'preview'
   discoverPreview: null,  // { name, flavour, spells }
   discoverDesc:   '',
@@ -50,8 +49,6 @@ function dismissSplash() {
 }
 setTimeout(dismissSplash, 2600);
 
-// Pending recalibration (level-up flow)
-let pendingRecal = null; // { schoolId, schoolName, spells }
 
 // ── Themed notifications ──────────────────────────────────────────────────────
 let _errorTimer = null;
@@ -384,7 +381,7 @@ function showBanner(school, level, rank) {
   if (!banner) return;
   document.getElementById('levelup-text').textContent = `${school.name} \u2014 Level ${level}`;
   document.getElementById('levelup-text').style.color = school.color;
-  document.getElementById('levelup-sub').textContent  = `Rank ${rank.name} \u00b7 The Augur reforges your incantations`;
+  document.getElementById('levelup-sub').textContent  = `Rank ${rank.name} attained`;
   banner.style.setProperty('--banner-color', school.color);
   banner.classList.remove('hidden', 'hiding');
   void banner.offsetWidth;
@@ -462,9 +459,15 @@ function renderDrawer() {
   let spellsHtml = '';
   for (const sp of (school.spells || [])) {
     const desc = sp.description ? `<span class="habit-desc">${escHtml(sp.description)}</span>` : '';
+    const pendingMark = sp.naming_pending
+      ? `<span title="The Augur is forging a name\u2026" style="font-size:10px;color:rgba(201,162,39,0.35);margin-left:4px;">&#10022;</span>`
+      : '';
+    const nameStyle = sp.naming_pending ? 'font-style:italic;color:rgba(201,162,39,0.55);' : '';
     spellsHtml += `
-      <button class="habit-btn" onclick="castSpell(${sp.id},${school.id})" ${deedLoading ? 'disabled' : ''}>
-        <span class="habit-name-wrap"><span class="habit-name">${escHtml(sp.name)}</span>${desc}</span>
+      <button class="habit-btn${sp.naming_pending ? ' naming-pending' : ''}" onclick="castSpell(${sp.id},${school.id})" ${deedLoading ? 'disabled' : ''}>
+        <span class="habit-name-wrap">
+          <span class="habit-btn-name" style="${nameStyle}">${escHtml(sp.name)}</span>${pendingMark}${desc}
+        </span>
         <span class="habit-xp" style="color:${school.color};">+${sp.xp} XP</span>
       </button>`;
   }
@@ -554,7 +557,8 @@ function renderDrawerEdit() {
     <div class="edit-spell-row" id="edit-spell-${sp.id}">
       <div style="display:flex;gap:6px;margin-bottom:4px;align-items:center;">
         <input class="field-input" id="esp-name-${sp.id}" value="${escHtml(sp.name)}" maxlength="80"
-               placeholder="Incantation name" style="flex:1;font-size:13px;padding:6px 8px;">
+               placeholder="Incantation name"
+               style="flex:1;font-size:13px;padding:6px 8px;${sp.naming_pending ? 'color:rgba(201,162,39,0.55);font-style:italic;' : ''}">
         <input type="number" class="field-input" id="esp-xp-${sp.id}" value="${sp.xp}" min="10" max="50"
                style="width:52px;font-size:13px;padding:6px 8px;text-align:center;">
         <button class="drawer-edit-btn" style="font-size:16px;" onclick="saveSpellEdit(${sp.id})" title="Save">&#10003;</button>
@@ -595,15 +599,16 @@ function renderDrawerEdit() {
         <button class="consult-btn" style="letter-spacing:2px;" onclick="showAddSpellForm()">+ ADD INCANTATION</button>
       </div>
       <div id="add-spell-form" style="display:none;">
+        <input class="field-input" id="new-spell-desc" maxlength="120"
+               placeholder="What you actually do — e.g. Walk 8,000 steps"
+               style="width:100%;font-size:13px;padding:6px 8px;margin-bottom:6px;">
         <div style="display:flex;gap:6px;margin-bottom:4px;align-items:center;">
-          <input class="field-input" id="new-spell-name" maxlength="80" placeholder="Incantation name"
+          <input class="field-input" id="new-spell-name" maxlength="80"
+                 placeholder="Incantation name (optional — Augur will forge one)"
                  style="flex:1;font-size:13px;padding:6px 8px;">
           <input type="number" class="field-input" id="new-spell-xp" value="20" min="10" max="50"
                  style="width:52px;font-size:13px;padding:6px 8px;text-align:center;">
         </div>
-        <input class="field-input" id="new-spell-desc" maxlength="120"
-               placeholder="Plain description — e.g. Walk 8,000 steps"
-               style="width:100%;font-size:13px;padding:6px 8px;margin-bottom:8px;">
         <div style="display:flex;justify-content:flex-end;gap:8px;">
           <button class="consult-btn" onclick="hideAddSpellForm()">CANCEL</button>
           <button class="oracle-submit" onclick="addSpell()">ADD</button>
@@ -619,7 +624,7 @@ function renderDrawerEdit() {
 function showAddSpellForm() {
   document.getElementById('add-spell-collapsed').style.display = 'none';
   document.getElementById('add-spell-form').style.display = '';
-  document.getElementById('new-spell-name').focus();
+  document.getElementById('new-spell-desc').focus();
 }
 
 function hideAddSpellForm() {
@@ -748,14 +753,15 @@ async function deleteSpell(spellId) {
 }
 
 async function addSpell() {
-  const name = (document.getElementById('new-spell-name').value || '').trim();
   const desc = (document.getElementById('new-spell-desc').value || '').trim();
+  const name = (document.getElementById('new-spell-name').value || '').trim();
   const xp   = Math.max(10, Math.min(50, parseInt(document.getElementById('new-spell-xp').value, 10) || 20));
-  if (!name) return;
+  if (!desc) return;
   const result = await apiFetch(`/api/school/${activeSchoolId}/spell`, { name, description: desc, xp });
   if (result.error) { showError(result.error); return; }
   const school = getSchool(activeSchoolId);
   if (school) school.spells.push(result);
+  if (result.naming_pending) startNamingPoll();
   renderDrawerEdit();
 }
 
@@ -845,64 +851,8 @@ function stopRecalFlavour() {
   if (_recalFlavourTimer) { clearInterval(_recalFlavourTimer); _recalFlavourTimer = null; }
 }
 
-// ── Auto-recalibrate on rank-up (panel flow) ──────────────────────────────────
-async function triggerRecalibrate(schoolId) {
-  const school = getSchool(schoolId);
-  // Show panel immediately in loading state
-  document.getElementById('recal-panel-school').textContent = (school?.name || '').toUpperCase();
-  document.getElementById('recal-panel-loading').style.display = '';
-  document.getElementById('recal-panel-results').style.display = 'none';
-  document.getElementById('recal-panel').classList.remove('hidden');
-  startRecalFlavour('recal-flavour-text');
-
-  const result = await fetchStream(
-    '/api/augur/recalibrate',
-    { school_id: schoolId, context: '' },
-    partial => {
-      const names = extractStreamNames(partial);
-      const el = document.getElementById('recal-stream-preview');
-      if (el && names.length) {
-        updateStreamPreview(el, names);
-      }
-    }
-  );
-  stopRecalFlavour();
-
-  if (!result || result.err || !result.spells) {
-    document.getElementById('recal-panel').classList.add('hidden');
-    showError(result?.err || 'The Augur could not recalibrate at this time.');
-    return;
-  }
-
-  pendingRecal = { schoolId, schoolName: school?.name || '', spells: result.spells };
-  const xpColor = school?.color || '#c9a227';
-  const spellRows = result.spells.map(sp => `
-    <div class="augur-spell-row">
-      <span class="augur-spell-name-wrap">
-        <span>${escHtml(sp.name)}</span>
-        ${sp.description ? `<span class="augur-spell-desc">${escHtml(sp.description)}</span>` : ''}
-      </span>
-      <span class="augur-spell-xp" style="color:${xpColor}">+${sp.xp} XP</span>
-    </div>`).join('');
-  document.getElementById('recal-panel-spells').innerHTML = spellRows;
-  document.getElementById('recal-panel-loading').style.display = 'none';
-  document.getElementById('recal-panel-results').style.display = '';
-}
-
-async function acceptRecal() {
-  if (!pendingRecal) return;
-  const { schoolId, spells } = pendingRecal;
-  const result = await apiFetch('/api/augur/recalibrate/confirm', { school_id: schoolId, spells });
-  if (result.error) return;
-  const school = getSchool(schoolId);
-  if (school) school.spells = result.spells;
-  if (activeSchoolId === schoolId) renderDrawer();
-  dismissRecal();
-}
-
 function dismissRecal() {
-  pendingRecal = null;
-  document.getElementById('recal-panel').classList.add('hidden');
+  document.getElementById('recal-panel')?.classList.add('hidden');
 }
 
 // ── Side menu ─────────────────────────────────────────────────────────────────
@@ -1328,7 +1278,7 @@ function renderOrrery() {
 }
 
 const AUGUR_MODE_LABELS = {
-  recalibrate: 'Reforge a School',
+  recalibrate: 'Add Incantations',
   discover:    'Discover a New School',
 };
 
@@ -1341,7 +1291,7 @@ function renderAugurTab() {
 
   const modeOptions = [
     { value: '',             label: '— Choose your purpose —' },
-    { value: 'recalibrate',  label: 'Reforge a School' },
+    { value: 'recalibrate',  label: 'Add Incantations' },
     { value: 'discover',     label: 'Discover a New School' },
   ];
 
@@ -1371,68 +1321,91 @@ function selectAugurMode(val) {
 }
 
 function renderRecalibrateSection() {
-  const st = augurState;
-
   const schoolOptions = schools.map(s =>
     ({ value: String(s.id), label: `${s.name} — LV${s.level}` })
   );
-  const defaultSchoolId = String(schools[0]?.id || '');
+  const defaultSchoolId = String(augurState.recalSchoolId || schools[0]?.id || '');
+  const selectedSchool  = getSchool(parseInt(defaultSchoolId));
 
-  if (st.recalLoading) {
-    setTimeout(() => startRecalFlavour('augur-recal-flavour'), 0);
-    return `
-      <div class="augur-section">
-        <div class="augur-section-title">RECALIBRATE A SCHOOL</div>
-        <div style="text-align:center;padding:24px 0;">
-          <div class="ai-spinner" style="width:18px;height:18px;border-width:2px;margin:0 auto 12px;"></div>
-          <div id="augur-recal-flavour" class="recal-flavour-text" style="font-family:'Cinzel',serif;font-size:10px;letter-spacing:2px;color:#7a6a50;">
-            THE AUGUR DELIBERATES&hellip;
-          </div>
-          <div id="augur-stream-preview" class="augur-stream-preview"></div>
-        </div>
-      </div>`;
-  }
+  // Habit suggestions: from HABIT_EXAMPLES for default schools, or nothing for custom
+  const examples = (window.HABIT_EXAMPLES || {})[selectedSchool?.name] || [];
+  const existingDescs = new Set((selectedSchool?.spells || []).map(sp => sp.description.toLowerCase()));
+  const suggestions = examples.filter(e => !existingDescs.has(e.description.toLowerCase()));
 
-  if (st.recalResult) {
-    const xpColor = st.recalResult.schoolColor || '#c9a227';
-    const spellRows = st.recalResult.spells.map(sp =>
-      `<div class="augur-spell-row">
-         <span class="augur-spell-name-wrap">
-           <span>${escHtml(sp.name)}</span>
-           ${sp.description ? `<span class="augur-spell-desc">${escHtml(sp.description)}</span>` : ''}
-         </span>
-         <span class="augur-spell-xp" style="color:${xpColor}">+${sp.xp} XP</span>
+  const suggestionRows = suggestions.map(e => `
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;">
+      <span style="font-family:'Crimson Text',serif;font-size:14px;color:rgba(201,162,39,0.8);">${escHtml(e.description)}</span>
+      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+        <span style="font-family:'Cinzel',serif;font-size:10px;color:#7a6a50;">${e.xp} XP</span>
+        <button class="consult-btn" style="padding:3px 10px;font-size:10px;"
+                onclick="augurAddSuggestion(${parseInt(defaultSchoolId)},'${escHtml(e.description.replace(/'/g, "\\'"))}',${e.xp})">ADD</button>
+      </div>
+    </div>`).join('');
+
+  const suggestionsBlock = suggestions.length
+    ? `<div style="margin-bottom:14px;">
+        <div style="font-family:'Cinzel',serif;font-size:10px;letter-spacing:2px;color:#7a6a50;margin-bottom:8px;">DOMAIN HABITS</div>
+        ${suggestionRows}
        </div>`
-    ).join('');
-    return `
-      <div class="augur-section">
-        <div class="augur-section-title">RECALIBRATE A SCHOOL</div>
-        <div class="augur-result">
-          <div class="augur-result-label">REFORGED INCANTATIONS &mdash; ${escHtml(st.recalResult.schoolName)}</div>
-          ${spellRows}
-        </div>
-        <div style="margin-top:12px;display:flex;justify-content:flex-end;gap:8px;">
-          <button class="consult-btn" onclick="resetRecal()">DENY</button>
-          <button class="oracle-submit" onclick="confirmRecal()">ACCEPT</button>
-        </div>
-      </div>`;
-  }
+    : '';
 
   return `
     <div class="augur-section">
-      <div class="augur-section-title">RECALIBRATE A SCHOOL</div>
+      <div class="augur-section-title">ADD INCANTATIONS</div>
       <div class="augur-section-sub">
-        The Augur will reforge a school's incantations based on your level, history, and any guidance you provide.
+        Select a school, then add habits from the suggestions below or define your own.
+        The Augur will forge each habit's arcane name in the background.
       </div>
-      ${customSelect('recal-school-select', schoolOptions, defaultSchoolId, 'updateRecalBanish')}
-      <textarea class="oracle-input" id="recal-context-input" rows="3"
-        placeholder="Guidance for the Augur (optional) \u2014 e.g. \u2018I\u2019ve started training for a marathon\u2019"
-        style="width:100%;margin-bottom:10px;"></textarea>
+      ${customSelect('recal-school-select', schoolOptions, defaultSchoolId, 'onRecalSchoolChange')}
+      ${suggestionsBlock}
+      <div style="font-family:'Cinzel',serif;font-size:10px;letter-spacing:2px;color:#7a6a50;margin-bottom:8px;">CUSTOM HABIT</div>
+      <div style="display:flex;gap:6px;margin-bottom:6px;align-items:center;">
+        <input class="field-input" id="recal-custom-desc" maxlength="120"
+               placeholder="e.g. Walk 8,000 steps" style="flex:1;font-size:13px;padding:6px 8px;">
+        <input type="number" class="field-input" id="recal-custom-xp" value="20" min="10" max="50"
+               style="width:52px;font-size:13px;padding:6px 8px;text-align:center;">
+      </div>
       <div style="display:flex;justify-content:space-between;align-items:center;">
         <button class="banish-school-btn recal-banish-btn" id="recal-banish-btn" onclick="banishSelectedSchool()" style="display:none;">BANISH</button>
-        <button class="oracle-submit" onclick="doAugurRecalibrate()">&#10022; CONSULT THE AUGUR</button>
+        <button class="oracle-submit" onclick="augurAddCustomHabit()">ADD INCANTATION</button>
       </div>
     </div>`;
+}
+
+function onRecalSchoolChange() {
+  const sel = document.getElementById('recal-school-select');
+  augurState.recalSchoolId = sel ? parseInt(sel.value) : null;
+  updateRecalBanish();
+  renderAugurTab();
+}
+
+async function augurAddSuggestion(schoolId, description, xp) {
+  const result = await apiFetch(`/api/school/${schoolId}/spell`, { description, xp });
+  if (result.error) { showError(result.error); return; }
+  const school = getSchool(schoolId);
+  if (school) {
+    school.spells.push(result);
+    if (activeSchoolId === schoolId) renderDrawer();
+    if (result.naming_pending) startNamingPoll();
+  }
+  renderAugurTab();  // refresh to remove the added suggestion
+}
+
+async function augurAddCustomHabit() {
+  const schoolId = parseInt(document.getElementById('recal-school-select')?.value);
+  const desc = (document.getElementById('recal-custom-desc')?.value || '').trim();
+  const xp   = Math.max(10, Math.min(50, parseInt(document.getElementById('recal-custom-xp')?.value, 10) || 20));
+  if (!schoolId || !desc) return;
+  const result = await apiFetch(`/api/school/${schoolId}/spell`, { description: desc, xp });
+  if (result.error) { showError(result.error); return; }
+  const school = getSchool(schoolId);
+  if (school) {
+    school.spells.push(result);
+    if (activeSchoolId === schoolId) renderDrawer();
+    if (result.naming_pending) startNamingPoll();
+  }
+  document.getElementById('recal-custom-desc').value = '';
+  renderAugurTab();
 }
 
 function renderDiscoverSection() {
@@ -1500,62 +1473,12 @@ function renderDiscoverSection() {
     </div>`;
 }
 
-function resetRecal() {
-  augurState.recalResult = null;
-  renderAugurTab();
-}
-
 function resetDiscover() {
   augurState.discoverStage   = 'input';
   augurState.discoverPreview = null;
   renderAugurTab();
 }
 
-async function doAugurRecalibrate() {
-  const schoolId = parseInt(document.getElementById('recal-school-select')?.value);
-  const context  = document.getElementById('recal-context-input')?.value.trim() || '';
-  if (!schoolId) return;
-
-  augurState.recalLoading = true;
-  renderAugurTab();
-
-  const result = await fetchStream(
-    '/api/augur/recalibrate',
-    { school_id: schoolId, context },
-    partial => {
-      const names = extractStreamNames(partial);
-      const el = document.getElementById('augur-stream-preview');
-      if (el && names.length) {
-        updateStreamPreview(el, names);
-      }
-    }
-  );
-
-  stopRecalFlavour();
-  augurState.recalLoading = false;
-
-  if (!result || result.err || !result.spells) {
-    augurState.recalResult = null;
-    renderAugurTab();
-    showError(result?.err || 'The Augur could not recalibrate at this time.');
-    return;
-  }
-
-  const school = getSchool(schoolId);
-  augurState.recalResult = { schoolId, schoolName: school?.name || '', schoolColor: school?.color || '#c9a227', spells: result.spells };
-  renderAugurTab();
-}
-
-async function confirmRecal() {
-  const { schoolId, spells } = augurState.recalResult;
-  const result = await apiFetch('/api/augur/recalibrate/confirm', { school_id: schoolId, spells });
-  if (result.error) { showError(result.error); return; }
-  const school = getSchool(schoolId);
-  if (school) school.spells = result.spells;
-  if (activeSchoolId === schoolId) renderDrawer();
-  augurState.recalResult = null;
-  renderAugurTab();
-}
 
 async function doAugurDiscover() {
   const desc = document.getElementById('discover-desc-input')?.value.trim() || '';
@@ -1737,6 +1660,7 @@ function initOnboarding() {
     results:       [],
     reviewIdx:     0,
     showCustomForm: false,
+    _namingChain:  Promise.resolve(), // serializes custom school naming requests
   };
   for (const s of (window.DEFAULT_SCHOOLS || [])) {
     onboardState.selected[s.name] = true;
@@ -1767,22 +1691,32 @@ function renderOnboardingStep1() {
          style="${sel ? `border-color:${c.color}55;` : ''}"
          onclick="toggleOnboardCustom(${i})">
       <div class="onboard-school-tile-check" style="${sel ? `color:${c.color};border-color:${c.color};` : ''}">&#10003;</div>
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-        <div class="onboard-school-tile-name" style="color:${c.color};${naming ? 'opacity:0.5;font-style:italic;' : ''}">${escHtml(label)}</div>
-        <button onclick="event.stopPropagation();removeOnboardCustom(${i})" style="background:none;border:none;color:rgba(201,162,39,0.4);cursor:pointer;font-size:16px;padding:0;line-height:1;">&times;</button>
-      </div>
-      <div class="onboard-school-tile-sub">${naming ? 'The Augur is naming this school\u2026' : escHtml(c.user_description || '')}</div>
+      <div class="onboard-school-tile-name" style="color:${c.color};${naming ? 'opacity:0.5;font-style:italic;' : ''}">${escHtml(label)}</div>
+      <div class="onboard-school-tile-sub" style="font-style:italic;color:rgba(201,162,39,0.4);">custom</div>
     </div>`;
   }).join('');
+
+  const habitSlots = onboardState._customHabitCount || 3;
+  const habitInputs = Array.from({length: habitSlots}, (_, i) =>
+    `<input class="field-input" id="onboard-habit-${i}" type="text" maxlength="120"
+       placeholder="e.g. Walk 8,000 steps" style="width:100%;font-size:13px;padding:6px 8px;margin-bottom:6px;">`
+  ).join('');
 
   const customFormHtml = onboardState.showCustomForm
     ? `<div class="onboard-custom-form">
         <div style="font-family:'Cinzel',serif;font-size:10px;letter-spacing:2px;color:rgba(201,162,39,0.5);margin-bottom:10px;">CUSTOM SCHOOL</div>
-        <input id="onboard-custom-name" type="text" placeholder="Name (e.g. Bouldering)" maxlength="40" />
-        <textarea id="onboard-custom-desc" rows="3" placeholder="I want to... (e.g. improve at bouldering and reach V5)" maxlength="200"></textarea>
-        <div style="display:flex;justify-content:flex-end;gap:8px;">
-          <button class="consult-btn" onclick="cancelOnboardCustom()">CANCEL</button>
-          <button class="oracle-submit" onclick="addOnboardCustom()">ADD</button>
+        <input id="onboard-custom-name" type="text" placeholder="Name (e.g. Bouldering) — optional, Augur will name it" maxlength="40"
+               style="width:100%;font-size:13px;padding:6px 8px;margin-bottom:10px;" class="field-input"/>
+        <div style="font-family:'Cinzel',serif;font-size:10px;letter-spacing:2px;color:rgba(201,162,39,0.5);margin-bottom:6px;">
+          YOUR HABITS <span style="color:rgba(201,162,39,0.3);font-size:9px;">— what you will actually do and log</span>
+        </div>
+        ${habitInputs}
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;">
+          <button class="consult-btn" onclick="addOnboardHabitSlot()" style="font-size:10px;padding:4px 10px;">+ MORE</button>
+          <div style="display:flex;gap:8px;">
+            <button class="consult-btn" onclick="cancelOnboardCustom()">CANCEL</button>
+            <button class="oracle-submit" onclick="addOnboardCustom()">ADD</button>
+          </div>
         </div>
       </div>`
     : `<button class="consult-btn" onclick="showOnboardCustomForm()" style="width:100%;margin-bottom:16px;">+ ADD CUSTOM SCHOOL</button>`;
@@ -1793,7 +1727,7 @@ function renderOnboardingStep1() {
   panel.innerHTML = `
     <div class="onboarding-eyebrow">THE GRIMOIRE AWAKENS</div>
     <div class="onboarding-title">CHOOSE YOUR SCHOOLS</div>
-    <div class="onboarding-sub">Select the paths you wish to walk. The Augur will forge your first incantations.</div>
+    <div class="onboarding-sub">Select the paths you wish to walk. Spells are forged from the habits you define.</div>
     <div class="onboard-school-grid">${defaultTiles}${customTiles}</div>
     ${customFormHtml}
     <div style="font-family:'Crimson Text',serif;font-size:12px;color:rgba(201,162,39,0.3);text-align:center;margin-bottom:4px;">
@@ -1801,7 +1735,7 @@ function renderOnboardingStep1() {
     </div>
     <div class="onboarding-actions">
       <button class="consult-btn" onclick="skipOnboarding()">SKIP</button>
-      <button class="oracle-submit" onclick="startOnboarding()"${count === 0 ? ' disabled' : ''}>SUMMON THE AUGUR</button>
+      <button class="oracle-submit" onclick="startOnboarding()"${count === 0 ? ' disabled' : ''}>BEGIN</button>
     </div>`;
 }
 
@@ -1825,16 +1759,45 @@ function removeOnboardCustom(idx) {
   renderOnboardingStep1();
 }
 
+function addOnboardHabitSlot() {
+  onboardState._customHabitCount = (onboardState._customHabitCount || 3) + 1;
+  if (onboardState._customHabitCount > 5) { onboardState._customHabitCount = 5; return; }
+  // Preserve existing values before re-render
+  const count = onboardState._customHabitCount - 1;
+  const vals = Array.from({length: count}, (_, i) => document.getElementById(`onboard-habit-${i}`)?.value || '');
+  onboardState._customHabitDraft = {
+    name: document.getElementById('onboard-custom-name')?.value || '',
+    habits: vals,
+  };
+  renderOnboardingStep1();
+  // Restore values
+  const d = onboardState._customHabitDraft;
+  if (d) {
+    const nameEl = document.getElementById('onboard-custom-name');
+    if (nameEl) nameEl.value = d.name;
+    d.habits.forEach((v, i) => { const el = document.getElementById(`onboard-habit-${i}`); if (el) el.value = v; });
+  }
+}
+
 function addOnboardCustom() {
   const name = (document.getElementById('onboard-custom-name')?.value || '').trim();
-  const desc = (document.getElementById('onboard-custom-desc')?.value || '').trim();
-  if (!name && !desc) return;
+  const habitCount = onboardState._customHabitCount || 3;
+  const habits = Array.from({length: habitCount}, (_, i) =>
+    (document.getElementById(`onboard-habit-${i}`)?.value || '').trim()
+  ).filter(Boolean);
+
+  if (!habits.length) return;
+
   const color = ONBOARD_CUSTOM_COLORS[onboardState.customs.length % ONBOARD_CUSTOM_COLORS.length];
-  const custom = { plain_name: name, user_description: desc, color, selected: true, name: null, flavour: null, _promise: null };
+  const custom = {
+    plain_name: name, user_description: '', habits,
+    color, selected: true,
+    name: name || null, flavour: null,
+  };
   onboardState.customs.push(custom);
   onboardState.showCustomForm = false;
-  // Kick off background naming immediately
-  custom._promise = fetchOnboardSchoolName(custom);
+  onboardState._customHabitCount = 3;
+  onboardState._customHabitDraft = null;
   renderOnboardingStep1();
 }
 
@@ -1844,203 +1807,120 @@ function toggleOnboardCustom(idx) {
   renderOnboardingStep1();
 }
 
-async function fetchOnboardSchoolName(custom) {
-  const description = custom.plain_name
-    ? `${custom.plain_name} — ${custom.user_description}`
-    : custom.user_description;
-  try {
-    const resp = await fetch('/api/augur/school', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ description }),
-    });
-    const reader = resp.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop();
-      for (const line of lines) {
-        if (!line.startsWith('data:')) continue;
-        const msg = JSON.parse(line.slice(5).trim());
-        if (msg.done) {
-          custom.name    = msg.name;
-          custom.flavour = msg.flavour;
-          // Only re-render step 1 tile if still on school selection
-          if (onboardState.step === 1 && !onboardState.showCustomForm) renderOnboardingStep1();
-          return;
-        }
-        if (msg.err) throw new Error(msg.err);
-      }
-    }
-  } catch (e) {
-    custom.name    = custom.plain_name || custom.user_description.slice(0, 30);
-    custom.flavour = custom.user_description;
-    if (onboardState.step === 1 && !onboardState.showCustomForm) renderOnboardingStep1();
-  }
-}
-
 async function skipOnboarding() {
   const result = await apiFetch('/api/onboard/skip', {});
   if (!result.error) onboardFadeReload();
 }
 
-async function startOnboarding() {
-  // Await any still-running naming promises for selected customs
+function startOnboarding() {
   const selectedCustoms = onboardState.customs.filter(c => c.selected !== false);
-  const stillNaming = selectedCustoms.filter(c => !c.name && c._promise);
-  if (stillNaming.length) {
-    onboardState.step = 'waiting';
-    renderOnboardingWaiting();
-    await Promise.all(stillNaming.map(c => c._promise));
-  }
 
-  const schools = [];
+  const results = [];
+
+  // Default schools: use hardcoded spell data directly — no AI needed
   for (const s of (window.DEFAULT_SCHOOLS || [])) {
-    if (onboardState.selected[s.name]) {
-      schools.push({ name: s.name, flavour: s.flavour, color: s.color, is_custom: false, user_description: '' });
-    }
+    if (!onboardState.selected[s.name]) continue;
+    results.push({
+      name: s.name, display_name: s.name, flavour: s.flavour, color: s.color,
+      is_custom: false, user_description: '',
+      plain_name: '', habits: [],
+      spells: (s.spells || []).map(sp => ({ ...sp })),
+      naming_pending: false,
+    });
   }
+
+  // Custom schools: use habits the user entered; AI will name them in background after commit
+  const PLACEHOLDERS = [
+    'Unnamed Rite', 'Unspoken Hex', 'Shrouded Oath',
+    'Nameless Vigil', 'Formless Pact', 'Void Incantation',
+    'Bound Unknown', 'Silent Mark',
+  ];
   for (const c of selectedCustoms) {
-    schools.push({ name: c.name || c.plain_name || '', flavour: c.flavour || c.user_description || '', color: c.color, is_custom: true, plain_name: c.plain_name || '', user_description: c.user_description });
+    const habits = (c.habits || []).filter(Boolean);
+    results.push({
+      name: c.plain_name || c.user_description.slice(0, 30) || 'Unnamed School',
+      display_name: c.plain_name || '',
+      flavour: c.user_description || '',
+      color: c.color, is_custom: true,
+      user_description: c.user_description || '',
+      plain_name: c.plain_name || '',
+      habits,
+      spells: habits.map((desc, i) => ({
+        name: PLACEHOLDERS[i % PLACEHOLDERS.length],
+        description: desc, xp: 20, naming_pending: true,
+      })),
+      naming_pending: true,
+    });
   }
-  if (!schools.length) return;
 
-  const prep = await apiFetch('/api/onboard/prepare', { schools });
-  if (prep.error) { showError(prep.error); return; }
+  if (!results.length) return;
 
-  onboardState.step = 2;
-  onboardState.results = schools.map(s => ({ ...s, spells: [], streamText: '' }));
-  renderOnboardingStep2();
-
-  const es = new EventSource('/api/onboard/stream');
-
-  es.onmessage = (e) => {
-    const msg = JSON.parse(e.data);
-    if (msg.school_start !== undefined) {
-      const idx = msg.school_start.idx;
-      const row = document.getElementById(`onboard-stream-${idx}`);
-      if (row) row.classList.add('active');
-      // Update name in case backend named it (edge case fallback)
-      const nameEl = document.getElementById(`onboard-stream-name-${idx}`);
-      if (nameEl && msg.school_start.name) nameEl.textContent = msg.school_start.name;
-    } else if (msg.t !== undefined) {
-      const idx = msg.idx;
-      if (idx !== undefined && onboardState.results[idx] !== undefined) {
-        onboardState.results[idx].streamText += msg.t;
-        const names = extractOnboardSpellNames(onboardState.results[idx].streamText);
-        appendOnboardStreamSpells(idx, names);
-      }
-    } else if (msg.school_end !== undefined) {
-      const idx = msg.school_end.idx;
-      if (onboardState.results[idx] !== undefined) {
-        onboardState.results[idx].spells = msg.school_end.spells;
-        const row = document.getElementById(`onboard-stream-${idx}`);
-        if (row) { row.classList.remove('active'); row.style.opacity = '0.55'; }
-      }
-    } else if (msg.all_done) {
-      es.close();
-      onboardState.step = 3;
-      onboardState.reviewIdx = 0;
-      renderOnboardingStep3();
-    } else if (msg.err) {
-      const idx = msg.idx;
-      if (idx !== undefined) {
-        const el = document.getElementById(`onboard-stream-spells-${idx}`);
-        if (el) el.innerHTML = `<div style="color:#c45a5a;font-family:'Crimson Text',serif;font-size:12px;">${escHtml(msg.err)}</div>`;
-      }
-    }
-  };
-
-  es.onerror = () => {
-    es.close();
-    showError('The Augur faltered during onboarding. Please try again.');
-  };
+  onboardState.step = 3;
+  onboardState.results = results;
+  onboardState.reviewIdx = 0;
+  renderOnboardingStep3();
 }
 
-function extractOnboardSpellNames(text) {
-  const names = [];
-  const re = /"name"\s*:\s*"([^"]+)"/g;
-  let m;
-  while ((m = re.exec(text)) !== null) names.push(m[1]);
-  return names;
-}
-
-function appendOnboardStreamSpells(idx, names) {
-  const el = document.getElementById(`onboard-stream-spells-${idx}`);
-  if (!el) return;
-  const existing = el.querySelectorAll('.onboard-stream-spell').length;
-  for (let i = existing; i < names.length; i++) {
-    const div = document.createElement('div');
-    div.className = 'onboard-stream-spell';
-    div.textContent = names[i];
-    el.appendChild(div);
-  }
-}
-
-function renderOnboardingWaiting() {
-  const panel = document.querySelector('.onboarding-panel');
-  const customNames = onboardState.customs
-    .filter(c => c.selected !== false)
-    .map(c => c.plain_name || c.user_description.slice(0, 30))
-    .join(', ');
-  panel.innerHTML = `
-    <div class="onboarding-eyebrow">THE AUGUR DELIBERATES</div>
-    <div class="onboarding-title">NAMING YOUR SCHOOLS</div>
-    <div class="onboarding-sub">The Augur peers into the nature of your pursuits and forges their arcane names&hellip;<br><br>
-      <span style="font-style:italic;color:rgba(201,162,39,0.4);">${escHtml(customNames)}</span>
-    </div>
-    <div class="ai-spinner" style="margin:24px auto;"></div>`;
-}
-
-function renderOnboardingStep2() {
-  const panel = document.querySelector('.onboarding-panel');
-  const rows = onboardState.results.map((s, idx) => `
-    <div class="onboard-stream-school" id="onboard-stream-${idx}">
-      <div class="onboard-stream-school-name" style="color:${s.color};">
-        <span id="onboard-stream-name-${idx}">${escHtml(s.name || '...')}</span>
-      </div>
-      <div id="onboard-stream-spells-${idx}"></div>
-    </div>`).join('');
-
-  panel.innerHTML = `
-    <div class="onboarding-eyebrow">THE AUGUR SPEAKS</div>
-    <div class="onboarding-title">FORGING INCANTATIONS</div>
-    <div class="onboarding-sub" id="onboard-stream-sub">Forging all incantations\u2026</div>
-    ${rows}`;
-}
-
-function renderOnboardingStep3() {
+function renderOnboardingStep3(skipScroll = false) {
   const panel = document.querySelector('.onboarding-panel');
   const school = onboardState.results[onboardState.reviewIdx];
   const total  = onboardState.results.length;
   const isLast = onboardState.reviewIdx === total - 1;
   const isFirst = onboardState.reviewIdx === 0;
+  const ri = onboardState.reviewIdx;
 
-  const spellRows = (school.spells || []).map((sp, si) => `
-    <div class="onboard-spell-row">
-      <input type="text" value="${escHtml(sp.name)}" maxlength="80"
-             oninput="onboardUpdateSpell(${onboardState.reviewIdx},${si},'name',this.value)" />
+  const namePlaceholder = school.is_custom
+    ? 'Name — Augur will forge one if left blank'
+    : 'School name';
+  const nameVal = school.display_name || '';
+
+  const spellRows = (school.spells || []).map((sp, si) => {
+    const isPending = sp.naming_pending;
+    return `
+    <div class="onboard-spell-row" style="position:relative;">
+      <button onclick="onboardRemoveSpell(${ri},${si})"
+              style="position:absolute;top:4px;right:0;background:none;border:none;cursor:pointer;
+                     font-size:14px;color:rgba(201,162,39,0.35);padding:0 2px;line-height:1;"
+              title="Remove incantation">&times;</button>
+      <div style="display:flex;align-items:center;gap:6px;padding-right:18px;">
+        <input type="text" value="${escHtml(sp.name)}" maxlength="80"
+               placeholder="Name — Augur will forge one if left blank"
+               style="${isPending ? 'color:rgba(201,162,39,0.45);font-style:italic;' : ''}"
+               oninput="onboardUpdateSpell(${ri},${si},'name',this.value);onboardUpdateSpell(${ri},${si},'naming_pending',false)" />
+        ${isPending ? `<span title="The Augur will name this after you begin"
+          style="font-size:10px;color:rgba(201,162,39,0.35);font-family:'Cinzel',serif;white-space:nowrap;">&#10022;</span>` : ''}
+      </div>
       <textarea rows="1" maxlength="120"
-                oninput="onboardUpdateSpell(${onboardState.reviewIdx},${si},'description',this.value);onboardAutoResize(this)"
+                oninput="onboardUpdateSpell(${ri},${si},'description',this.value);onboardAutoResize(this)"
                 >${escHtml(sp.description || '')}</textarea>
-      <div class="onboard-spell-xp">${sp.xp} XP</div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
+
+  const pendingNote = school.naming_pending
+    ? `<div style="font-family:'Crimson Text',serif;font-size:12px;color:rgba(201,162,39,0.4);margin-bottom:12px;">
+        &#10022; The Augur will forge arcane names in the background after you begin.
+       </div>`
+    : '';
 
   panel.innerHTML = `
     <div class="onboarding-eyebrow">REVIEW YOUR INCANTATIONS</div>
-    <div class="onboard-review-progress">SCHOOL ${onboardState.reviewIdx + 1} OF ${total}</div>
-    <div class="onboard-school-header" style="--school-color:${school.color};">
-      <div class="onboard-school-header-dot" style="background:${school.color};box-shadow:0 0 8px ${school.color}80;"></div>
-      <div class="onboard-school-header-name" style="color:${school.color};">${escHtml(school.name)}</div>
+    <div class="onboard-review-progress">SCHOOL ${ri + 1} OF ${total}</div>
+    <div class="onboard-school-header" style="--school-color:${school.color};align-items:center;">
+      <div class="onboard-school-header-dot" style="background:${school.color};box-shadow:0 0 8px ${school.color}80;flex-shrink:0;"></div>
+      <input type="text" value="${escHtml(nameVal)}" maxlength="50"
+             placeholder="${escHtml(namePlaceholder)}"
+             style="color:${school.color};font-family:'Cinzel',serif;font-size:14px;letter-spacing:1px;
+                    background:none;border:none;border-bottom:1px solid ${school.color}40;
+                    flex:1;padding:2px 0;outline:none;"
+             oninput="onboardUpdateSchoolName(${ri},this.value)" />
     </div>
+    ${pendingNote}
     <div style="font-family:'Crimson Text',serif;font-size:13px;color:rgba(201,162,39,0.5);margin-bottom:14px;">
-      Edit names and descriptions as you see fit.
+      Edit incantations as you see fit.
     </div>
     ${spellRows}
+    <button class="consult-btn" onclick="onboardAddSpell(${ri})"
+            style="width:100%;margin-top:10px;font-size:11px;">+ ADD INCANTATION</button>
     <div style="font-family:'Crimson Text',serif;font-size:12px;color:rgba(201,162,39,0.3);text-align:center;margin:14px 0 4px;">
       Everything can be changed later.
     </div>
@@ -2049,8 +1929,7 @@ function renderOnboardingStep3() {
       <button class="oracle-submit" onclick="${isLast ? 'finishOnboarding()' : 'onboardReviewNext()'}">${isLast ? 'BEGIN' : 'NEXT'}</button>
     </div>`;
 
-  panel.scrollTop = 0;
-  // Auto-resize all textareas after render
+  if (!skipScroll) panel.scrollTop = 0;
   panel.querySelectorAll('textarea').forEach(ta => onboardAutoResize(ta));
 }
 
@@ -2064,6 +1943,33 @@ function onboardUpdateSpell(schoolIdx, spellIdx, field, value) {
   if (sp) sp[field] = value;
 }
 
+function onboardUpdateSchoolName(ri, val) {
+  const school = onboardState.results[ri];
+  if (school) school.display_name = val;
+}
+
+function onboardRemoveSpell(ri, si) {
+  const school = onboardState.results[ri];
+  if (!school) return;
+  school.spells.splice(si, 1);
+  renderOnboardingStep3(true);
+}
+
+function onboardAddSpell(ri) {
+  const school = onboardState.results[ri];
+  if (!school) return;
+  const PLACEHOLDERS = [
+    'Unnamed Rite', 'Unspoken Hex', 'Shrouded Oath',
+    'Nameless Vigil', 'Formless Pact', 'Void Incantation',
+    'Bound Unknown', 'Silent Mark',
+  ];
+  school.spells.push({
+    name: PLACEHOLDERS[school.spells.length % PLACEHOLDERS.length],
+    description: '', xp: 20, naming_pending: true,
+  });
+  renderOnboardingStep3(true);
+}
+
 function onboardReviewNext() {
   onboardState.reviewIdx++;
   renderOnboardingStep3();
@@ -2075,18 +1981,77 @@ function onboardReviewPrev() {
 }
 
 async function finishOnboarding() {
-  const payload = onboardState.results.map(s => ({
-    name: s.name,
-    flavour: s.flavour,
-    color: s.color,
-    is_custom: s.is_custom,
-    user_description: s.user_description || '',
-    spells: s.spells,
-  }));
+  const payload = onboardState.results.map(s => {
+    if (s.is_custom) {
+      // Send habits array; backend saves with placeholders + triggers AI naming
+      return {
+        is_custom: true,
+        color: s.color,
+        plain_name: (s.display_name || s.plain_name || '').trim(),
+        user_description: s.user_description || '',
+        habits: (s.spells || []).map(sp => ({ description: sp.description, xp: sp.xp })),
+      };
+    }
+    // Default school: send display_name if user changed it, plus explicit spell list
+    return {
+      name: s.name,
+      display_name: (s.display_name || '').trim(),
+      color: s.color,
+      is_custom: false,
+      spells: (s.spells || []).map(sp => ({
+        name: sp.name, description: sp.description, xp: sp.xp, naming_pending: !!sp.naming_pending,
+      })),
+    };
+  });
 
   const result = await apiFetch('/api/onboard/commit', { schools: payload });
   if (result.error) { showError(result.error); return; }
   onboardFadeReload();
+}
+
+// Poll /api/ai/naming-status and update in-memory school data + DOM when AI finishes naming
+let _namingPollTimer = null;
+function startNamingPoll() {
+  if (_namingPollTimer) return;
+  let attempts = 0;
+  _namingPollTimer = setInterval(async () => {
+    attempts++;
+    if (attempts > 20) { clearInterval(_namingPollTimer); _namingPollTimer = null; return; }
+    try {
+      const result = await apiFetch('/api/ai/naming-status', null, 'GET');
+      if (!result || result.error) return;
+      let anyPending = false;
+      for (const rs of (result.schools || [])) {
+        const school = schools.find(s => s.id === rs.id);
+        if (!school) continue;
+        if (rs.naming_pending) { anyPending = true; }
+        if (!rs.naming_pending && rs.name !== school.name) {
+          school.name = rs.name;
+          school.flavour = rs.flavour;
+          updateCardDOM(school);
+          if (activeSchoolId === school.id) renderDrawer();
+        }
+        for (const rsp of (rs.spells || [])) {
+          const sp = (school.spells || []).find(s => s.id === rsp.id);
+          if (!sp) continue;
+          if (rsp.naming_pending) { anyPending = true; }
+          if (!rsp.naming_pending && rsp.name !== sp.name) {
+            sp.name = rsp.name;
+            sp.naming_pending = 0;
+            // Update spell button text in drawer if open
+            const btn = document.querySelector(`.habit-btn[onclick*="castSpell(${sp.id},"]`);
+            if (btn) {
+              const nameEl = btn.querySelector('.habit-btn-name');
+              if (nameEl) nameEl.textContent = sp.name;
+              btn.classList.remove('naming-pending');
+            }
+            if (activeSchoolId === school.id) renderDrawer();
+          }
+        }
+      }
+      if (!anyPending) { clearInterval(_namingPollTimer); _namingPollTimer = null; }
+    } catch (_) {}
+  }, 8000);
 }
 
 function onboardFadeReload() {
@@ -2100,3 +2065,8 @@ function onboardFadeReload() {
 
 // Kick off onboarding if needed
 initOnboarding();
+
+// Start polling if any schools/spells still need AI naming
+if (schools.some(s => s.naming_pending || (s.spells || []).some(sp => sp.naming_pending))) {
+  startNamingPoll();
+}
