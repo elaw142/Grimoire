@@ -1839,46 +1839,50 @@ async function finishOnboarding() {
 
 // Poll /api/ai/naming-status and update in-memory school data + DOM when AI finishes naming
 let _namingPollTimer = null;
+let _namingPollAttempts = 0;
 function startNamingPoll() {
   if (_namingPollTimer) return;
-  let attempts = 0;
+  _namingPollAttempts = 0;
   _namingPollTimer = setInterval(async () => {
-    attempts++;
-    if (attempts > 30) { clearInterval(_namingPollTimer); _namingPollTimer = null; return; }
+    if (++_namingPollAttempts > 150) { clearInterval(_namingPollTimer); _namingPollTimer = null; return; }
+    let result;
     try {
-      const result = await apiFetch('/api/ai/naming-status', null, 'GET');
-      if (!result || result.error) return;
-      let anyPending = false;
-      let needsDrawerRefresh = false;
-      for (const rs of (result.schools || [])) {
-        const school = schools.find(s => s.id === rs.id);
-        if (!school) continue;
-        if (rs.naming_pending) {
-          anyPending = true;
-        } else if (school.naming_pending) {
-          // School just finished — clear pending and apply new name/flavour
-          school.naming_pending = 0;
-          school.name    = rs.name;
-          school.flavour = rs.flavour;
-          updateCardDOM(school);
-          if (activeSchoolId === school.id) needsDrawerRefresh = true;
-        }
-        for (const rsp of (rs.spells || [])) {
-          const sp = (school.spells || []).find(s => s.id === rsp.id);
-          if (!sp) continue;
-          if (rsp.naming_pending) {
-            anyPending = true;
-          } else if (sp.naming_pending) {
-            // Spell just finished — clear pending and apply new name
-            sp.name = rsp.name;
-            sp.naming_pending = 0;
-            if (activeSchoolId === school.id) needsDrawerRefresh = true;
-          }
+      const resp = await fetch('/api/ai/naming-status');
+      if (!resp.ok) return;
+      result = await resp.json();
+    } catch (e) {
+      console.warn('naming poll fetch error:', e);
+      return;
+    }
+    if (!result || result.error) return;
+
+    let anyPending = false;
+    let changed = false;
+    for (const rs of (result.schools || [])) {
+      const school = schools.find(s => s.id === rs.id);
+      if (!school) continue;
+      if (rs.naming_pending) { anyPending = true; continue; }
+      // School finished naming — sync name/flavour/flag regardless of whether name changed
+      if (school.naming_pending || school.name !== rs.name || school.flavour !== rs.flavour) {
+        school.naming_pending = 0;
+        school.name    = rs.name;
+        school.flavour = rs.flavour;
+        updateCardDOM(school);
+        changed = true;
+      }
+      for (const rsp of (rs.spells || [])) {
+        const sp = (school.spells || []).find(s => s.id === rsp.id);
+        if (!sp) continue;
+        if (rsp.naming_pending) { anyPending = true; continue; }
+        if (sp.naming_pending || sp.name !== rsp.name) {
+          sp.naming_pending = 0;
+          sp.name = rsp.name;
+          changed = true;
         }
       }
-      if (needsDrawerRefresh) renderDrawer();
-      if (!anyPending) { clearInterval(_namingPollTimer); _namingPollTimer = null; }
-    } catch (_) {}
+    }
+    if (changed && activeSchoolId) renderDrawer();
+    if (!anyPending) { clearInterval(_namingPollTimer); _namingPollTimer = null; }
   }, 4000);
 }
 
