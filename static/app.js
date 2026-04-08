@@ -1849,34 +1849,34 @@ function startNamingPoll() {
       const result = await apiFetch('/api/ai/naming-status', null, 'GET');
       if (!result || result.error) return;
       let anyPending = false;
+      let needsDrawerRefresh = false;
       for (const rs of (result.schools || [])) {
         const school = schools.find(s => s.id === rs.id);
         if (!school) continue;
-        if (rs.naming_pending) { anyPending = true; }
-        if (!rs.naming_pending && rs.name !== school.name) {
-          school.name = rs.name;
+        if (rs.naming_pending) {
+          anyPending = true;
+        } else if (school.naming_pending) {
+          // School just finished — clear pending and apply new name/flavour
+          school.naming_pending = 0;
+          school.name    = rs.name;
           school.flavour = rs.flavour;
           updateCardDOM(school);
-          if (activeSchoolId === school.id) renderDrawer();
+          if (activeSchoolId === school.id) needsDrawerRefresh = true;
         }
         for (const rsp of (rs.spells || [])) {
           const sp = (school.spells || []).find(s => s.id === rsp.id);
           if (!sp) continue;
-          if (rsp.naming_pending) { anyPending = true; }
-          if (!rsp.naming_pending && rsp.name !== sp.name) {
+          if (rsp.naming_pending) {
+            anyPending = true;
+          } else if (sp.naming_pending) {
+            // Spell just finished — clear pending and apply new name
             sp.name = rsp.name;
             sp.naming_pending = 0;
-            // Update spell button text in drawer if open
-            const btn = document.querySelector(`.habit-btn[onclick*="castSpell(${sp.id},"]`);
-            if (btn) {
-              const nameEl = btn.querySelector('.habit-btn-name');
-              if (nameEl) nameEl.textContent = sp.name;
-              btn.classList.remove('naming-pending');
-            }
-            if (activeSchoolId === school.id) renderDrawer();
+            if (activeSchoolId === school.id) needsDrawerRefresh = true;
           }
         }
       }
+      if (needsDrawerRefresh) renderDrawer();
       if (!anyPending) { clearInterval(_namingPollTimer); _namingPollTimer = null; }
     } catch (_) {}
   }, 4000);
