@@ -1299,6 +1299,71 @@ def api_augur_school_confirm():
     })
 
 
+@app.route('/api/augur/school/create', methods=['POST'])
+@require_login_api
+def api_augur_school_create():
+    """Create a custom school from user-defined habits; AI names it in the background."""
+    user_id = session['user_id']
+    data = request.get_json()
+    plain_name = (data.get('plain_name') or '').strip()
+    habits = data.get('habits') or []  # [{'description': str}]
+
+    db = get_db()
+    custom_count = db.execute(
+        'SELECT COUNT(*) FROM schools WHERE user_id=? AND is_custom=1', (user_id,)
+    ).fetchone()[0]
+    color = CUSTOM_COLORS[custom_count % len(CUSTOM_COLORS)]
+
+    school_name = plain_name or 'Unnamed School'
+    now = datetime.utcnow().isoformat()
+    cur = db.execute(
+        'INSERT INTO schools (user_id, name, flavour, is_custom, color, user_description, created_at, naming_pending) '
+        'VALUES (?,?,?,1,?,?,?,1)',
+        (user_id, school_name, 'An unnamed domain of arcane practice.', color, plain_name, now),
+    )
+    school_id = cur.lastrowid
+
+    spell_ids = []
+    habit_descriptions = []
+    new_spells = []
+    for i, h in enumerate(habits[:5]):
+        desc = str(h.get('description') or '').strip()[:120]
+        if not desc:
+            continue
+        placeholder = PLACEHOLDER_SPELL_NAMES[i % len(PLACEHOLDER_SPELL_NAMES)]
+        cur2 = db.execute(
+            'INSERT INTO spells (school_id, name, description, xp, naming_pending) VALUES (?,?,?,?,1)',
+            (school_id, placeholder, desc, 20),
+        )
+        spell_ids.append(cur2.lastrowid)
+        habit_descriptions.append(desc)
+        new_spells.append({
+            'id': cur2.lastrowid, 'name': placeholder, 'description': desc,
+            'xp': 20, 'naming_pending': 1, 'school_id': school_id,
+        })
+
+    db.execute('INSERT INTO user_xp (user_id, school_id, xp) VALUES (?,?,0)', (user_id, school_id))
+    db.commit()
+
+    if habit_descriptions:
+        t = threading.Thread(
+            target=_name_custom_school_bg,
+            args=(DATABASE, school_id, plain_name, habit_descriptions, spell_ids),
+            daemon=True,
+        )
+        t.start()
+
+    rank = get_rank(1)
+    return jsonify({
+        'school': {
+            'id': school_id, 'name': school_name, 'flavour': '',
+            'is_custom': 1, 'color': color,
+            'total_xp': 0, 'level': 1, 'xp_in_level': 0,
+            'naming_pending': 1, 'rank': rank, 'spells': new_spells,
+        }
+    })
+
+
 # Titles per school per rank. Multiple options per rank; picked by dominant_level % len.
 SCHOOL_TITLES = {
     'Restoration': {

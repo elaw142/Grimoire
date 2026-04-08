@@ -26,11 +26,8 @@ let milestonesData = null;        // cached milestones from API
 
 // Augur tab state
 let augurState = {
-  mode:           null,    // null | 'recalibrate' | 'discover'
-  recalSchoolId:  null,   // currently selected school in recalibrate section
-  discoverStage:  'input', // 'input' | 'loading' | 'preview'
-  discoverPreview: null,  // { name, flavour, spells }
-  discoverDesc:   '',
+  createHabitCount: 3,
+  _habitDraft: null,
 };
 
 // Misc
@@ -435,19 +432,6 @@ async function deleteSchool(schoolId) {
   });
 }
 
-function updateRecalBanish() {
-  const sel = document.getElementById('recal-school-select');
-  const btn = document.getElementById('recal-banish-btn');
-  if (!sel || !btn) return;
-  const school = getSchool(parseInt(sel.value));
-  btn.style.display = (school && school.is_custom) ? '' : 'none';
-}
-
-async function banishSelectedSchool() {
-  const sel = document.getElementById('recal-school-select');
-  if (!sel) return;
-  await deleteSchool(parseInt(sel.value));
-}
 
 function renderDrawer() {
   if (drawerEditMode) { renderDrawerEdit(); return; }
@@ -1295,271 +1279,97 @@ function renderOrrery() {
     </div>`;
 }
 
-const AUGUR_MODE_LABELS = {
-  recalibrate: 'Add Incantations',
-  discover:    'Discover a New School',
-};
-
 // ── Augur tab ─────────────────────────────────────────────────────────────────
 function renderAugurTab() {
   const el = document.getElementById('menu-content');
   if (!el) return;
-
-  const { mode } = augurState;
-
-  const modeOptions = [
-    { value: '',             label: '— Choose your purpose —' },
-    { value: 'recalibrate',  label: 'Add Incantations' },
-    { value: 'discover',     label: 'Discover a New School' },
-  ];
-
-  const sectionHtml = mode === 'recalibrate' ? renderRecalibrateSection()
-                    : mode === 'discover'    ? renderDiscoverSection()
-                    : '';
-
   el.innerHTML = `
     <div class="augur-panel-title">THE AUGUR'S CHAMBER</div>
-    <div class="augur-panel-sub">Seek counsel. Forge new paths.</div>
-    <div class="augur-section">
-      ${customSelect('augur-mode-select', modeOptions, mode || '', 'selectAugurMode')}
-    </div>
-    ${sectionHtml}`;
-
-  if (mode === 'recalibrate') updateRecalBanish();
+    <div class="augur-panel-sub">Forge a new domain of arcane practice.</div>
+    ${renderAugurCreateSection()}`;
+  // Restore draft values if any
+  const d = augurState._habitDraft;
+  if (d) {
+    const nameEl = document.getElementById('augur-create-name');
+    if (nameEl) nameEl.value = d.name;
+    d.habits.forEach((v, i) => { const e = document.getElementById(`augur-habit-${i}`); if (e) e.value = v; });
+    augurState._habitDraft = null;
+  }
 }
 
-function selectAugurMode(val) {
-  augurState.mode = val || null;
-  // Reset sub-state when switching modes
-  augurState.recalResult   = null;
-  augurState.recalLoading  = false;
-  augurState.discoverStage = 'input';
-  augurState.discoverPreview = null;
-  renderAugurTab();
-}
-
-function renderRecalibrateSection() {
-  const schoolOptions = schools.map(s =>
-    ({ value: String(s.id), label: `${s.name} — LV${s.level}` })
-  );
-  const defaultSchoolId = String(augurState.recalSchoolId || schools[0]?.id || '');
-  const selectedSchool  = getSchool(parseInt(defaultSchoolId));
-
-  // Habit suggestions: from HABIT_EXAMPLES for default schools, or nothing for custom
-  const examples = (window.HABIT_EXAMPLES || {})[selectedSchool?.name] || [];
-  const existingDescs = new Set((selectedSchool?.spells || []).map(sp => sp.description.toLowerCase()));
-  const suggestions = examples.filter(e => !existingDescs.has(e.description.toLowerCase()));
-
-  const suggestionRows = suggestions.map(e => `
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;">
-      <span style="font-family:'Crimson Text',serif;font-size:14px;color:rgba(201,162,39,0.8);">${escHtml(e.description)}</span>
-      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
-        <span style="font-family:'Cinzel',serif;font-size:10px;color:#7a6a50;">${e.xp} XP</span>
-        <button class="consult-btn" style="padding:3px 10px;font-size:10px;"
-                onclick="augurAddSuggestion(${parseInt(defaultSchoolId)},'${escHtml(e.description.replace(/'/g, "\\'"))}',${e.xp})">ADD</button>
-      </div>
-    </div>`).join('');
-
-  const suggestionsBlock = suggestions.length
-    ? `<div style="margin-bottom:14px;">
-        <div style="font-family:'Cinzel',serif;font-size:10px;letter-spacing:2px;color:#7a6a50;margin-bottom:8px;">DOMAIN HABITS</div>
-        ${suggestionRows}
-       </div>`
-    : '';
+function renderAugurCreateSection() {
+  const habitSlots = augurState.createHabitCount || 3;
+  const habitInputs = Array.from({length: habitSlots}, (_, i) =>
+    `<input class="field-input" id="augur-habit-${i}" type="text" maxlength="120"
+       placeholder="e.g. Walk 8,000 steps" style="width:100%;font-size:13px;padding:6px 8px;margin-bottom:6px;">`
+  ).join('');
 
   return `
     <div class="augur-section">
-      <div class="augur-section-title">ADD INCANTATIONS</div>
+      <div class="augur-section-title">CREATE NEW SCHOOL</div>
       <div class="augur-section-sub">
-        Select a school, then add habits from the suggestions below or define your own.
-        The Augur will forge each habit's arcane name in the background.
+        Define your habits — the Augur will forge arcane names in the background.
       </div>
-      ${customSelect('recal-school-select', schoolOptions, defaultSchoolId, 'onRecalSchoolChange')}
-      ${suggestionsBlock}
-      <div style="font-family:'Cinzel',serif;font-size:10px;letter-spacing:2px;color:#7a6a50;margin-bottom:8px;">CUSTOM HABIT</div>
-      <div style="display:flex;gap:6px;margin-bottom:6px;align-items:center;">
-        <input class="field-input" id="recal-custom-desc" maxlength="120"
-               placeholder="e.g. Walk 8,000 steps" style="flex:1;font-size:13px;padding:6px 8px;">
-        <input type="number" class="field-input" id="recal-custom-xp" value="20" min="10" max="50"
-               style="width:52px;font-size:13px;padding:6px 8px;text-align:center;">
+      <input class="field-input" id="augur-create-name" type="text" maxlength="50"
+             placeholder="School name — Augur will name it if left blank"
+             style="width:100%;font-size:13px;padding:6px 8px;margin-bottom:14px;">
+      <div style="font-family:'Cinzel',serif;font-size:10px;letter-spacing:2px;color:#7a6a50;margin-bottom:6px;">
+        YOUR HABITS <span style="color:rgba(201,162,39,0.3);font-size:9px;">— what you will actually do and log</span>
       </div>
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <button class="banish-school-btn recal-banish-btn" id="recal-banish-btn" onclick="banishSelectedSchool()" style="display:none;">BANISH</button>
-        <button class="oracle-submit" onclick="augurAddCustomHabit()">ADD INCANTATION</button>
+      ${habitInputs}
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;">
+        <button class="consult-btn" onclick="augurCreateAddHabit()"
+                style="font-size:10px;padding:4px 10px;"${habitSlots >= 5 ? ' disabled' : ''}>+ MORE</button>
+        <button class="oracle-submit" id="augur-create-btn" onclick="augurCreateSubmit()">CREATE SCHOOL</button>
       </div>
     </div>`;
 }
 
-function onRecalSchoolChange() {
-  const sel = document.getElementById('recal-school-select');
-  augurState.recalSchoolId = sel ? parseInt(sel.value) : null;
-  updateRecalBanish();
+function augurCreateAddHabit() {
+  const count = augurState.createHabitCount || 3;
+  if (count >= 5) return;
+  augurState._habitDraft = {
+    name: document.getElementById('augur-create-name')?.value || '',
+    habits: Array.from({length: count}, (_, i) => document.getElementById(`augur-habit-${i}`)?.value || ''),
+  };
+  augurState.createHabitCount = count + 1;
   renderAugurTab();
 }
 
-async function augurAddSuggestion(schoolId, description, xp) {
-  const result = await apiFetch(`/api/school/${schoolId}/spell`, { description, xp });
-  if (result.error) { showError(result.error); return; }
-  const school = getSchool(schoolId);
-  if (school) {
-    school.spells.push(result);
-    if (activeSchoolId === schoolId) renderDrawer();
-    if (result.naming_pending) startNamingPoll();
-  }
-  renderAugurTab();  // refresh to remove the added suggestion
-}
+async function augurCreateSubmit() {
+  const name = (document.getElementById('augur-create-name')?.value || '').trim();
+  const count = augurState.createHabitCount || 3;
+  const habits = Array.from({length: count}, (_, i) =>
+    (document.getElementById(`augur-habit-${i}`)?.value || '').trim()
+  ).filter(Boolean).map(desc => ({ description: desc }));
 
-async function augurAddCustomHabit() {
-  const schoolId = parseInt(document.getElementById('recal-school-select')?.value);
-  const desc = (document.getElementById('recal-custom-desc')?.value || '').trim();
-  const xp   = Math.max(10, Math.min(50, parseInt(document.getElementById('recal-custom-xp')?.value, 10) || 20));
-  if (!schoolId || !desc) return;
-  const result = await apiFetch(`/api/school/${schoolId}/spell`, { description: desc, xp });
-  if (result.error) { showError(result.error); return; }
-  const school = getSchool(schoolId);
-  if (school) {
-    school.spells.push(result);
-    if (activeSchoolId === schoolId) renderDrawer();
-    if (result.naming_pending) startNamingPoll();
-  }
-  document.getElementById('recal-custom-desc').value = '';
-  renderAugurTab();
-}
+  if (!habits.length) { showError('Add at least one habit before creating a school.'); return; }
 
-function renderDiscoverSection() {
-  const st = augurState;
+  const btn = document.getElementById('augur-create-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'INSCRIBING\u2026'; }
 
-  if (st.discoverStage === 'loading') {
-    setTimeout(() => startRecalFlavour('augur-discover-flavour'), 0);
-    return `
-      <div class="augur-section">
-        <div class="augur-section-title">DISCOVER A NEW SCHOOL</div>
-        <div style="text-align:center;padding:24px 0;">
-          <div class="ai-spinner" style="width:18px;height:18px;border-width:2px;margin:0 auto 12px;"></div>
-          <div id="augur-discover-flavour" class="recal-flavour-text" style="font-family:'Cinzel',serif;font-size:10px;letter-spacing:2px;color:#7a6a50;">
-            THE AUGUR DIVINES&hellip;
-          </div>
-          <div id="augur-stream-preview" class="augur-stream-preview"></div>
-        </div>
-      </div>`;
-  }
-
-  if (st.discoverStage === 'preview' && st.discoverPreview) {
-    const p = st.discoverPreview;
-    const spellRows = p.spells.map(sp =>
-      `<div class="augur-spell-row">
-         <span class="augur-spell-name-wrap">
-           <span>${escHtml(sp.name)}</span>
-           ${sp.description ? `<span class="augur-spell-desc">${escHtml(sp.description)}</span>` : ''}
-         </span>
-         <span class="augur-spell-xp">+${sp.xp} XP</span>
-       </div>`
-    ).join('');
-    return `
-      <div class="augur-section">
-        <div class="augur-section-title">DISCOVER A NEW SCHOOL</div>
-        <div style="font-family:'Cinzel',serif;font-size:9px;letter-spacing:3px;color:#7a6a50;margin-bottom:10px;">
-          THE AUGUR PROPOSES &mdash; EDIT AS YOU SEE FIT
-        </div>
-        <input class="field-input" id="discover-name-input" value="${escHtml(p.name)}"
-               maxlength="50" style="margin-bottom:8px;font-family:'Cinzel',serif;font-size:15px;color:#c9a227;">
-        <textarea class="oracle-input" id="discover-flavour-input" rows="2"
-                  maxlength="300" style="width:100%;margin-bottom:14px;">${escHtml(p.flavour)}</textarea>
-        <div class="augur-result-label">OPENING INCANTATIONS</div>
-        ${spellRows}
-        <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px;">
-          <button class="consult-btn" onclick="resetDiscover()">BACK</button>
-          <button class="oracle-submit" onclick="confirmNewSchool()">INSCRIBE THIS SCHOOL</button>
-        </div>
-      </div>`;
-  }
-
-  return `
-    <div class="augur-section">
-      <div class="augur-section-title">DISCOVER A NEW SCHOOL</div>
-      <div class="augur-section-sub">
-        The Augur will divine a new domain of arcane practice and forge its opening incantations.
-      </div>
-      <textarea class="oracle-input" id="discover-desc-input" rows="3"
-        placeholder="Describe the domain you wish to cultivate \u2014 e.g. \u2018I want to improve my creative writing\u2019"
-        style="width:100%;margin-bottom:10px;"
-        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();doAugurDiscover();}"
-      >${escHtml(st.discoverDesc)}</textarea>
-      <div style="display:flex;justify-content:flex-end;">
-        <button class="oracle-submit" onclick="doAugurDiscover()">&#10022; CONSULT THE AUGUR</button>
-      </div>
-    </div>`;
-}
-
-function resetDiscover() {
-  augurState.discoverStage   = 'input';
-  augurState.discoverPreview = null;
-  renderAugurTab();
-}
-
-
-async function doAugurDiscover() {
-  const desc = document.getElementById('discover-desc-input')?.value.trim() || '';
-  if (!desc) return;
-  augurState.discoverDesc   = desc;
-  augurState.discoverStage  = 'loading';
-  renderAugurTab();
-
-  const result = await fetchStream(
-    '/api/augur/school',
-    { description: desc },
-    partial => {
-      const names = extractStreamNames(partial);
-      const el = document.getElementById('augur-stream-preview');
-      if (el && names.length) {
-        updateStreamPreview(el, names);
-      }
-    }
-  );
-  stopRecalFlavour();
-
-  if (result.err || !result.name) {
-    augurState.discoverStage = 'input';
-    renderAugurTab();
-    showError(result.err || 'The Augur could not conceive a school. Try again.');
-    return;
-  }
-
-  augurState.discoverPreview = result;
-  augurState.discoverStage   = 'preview';
-  renderAugurTab();
-}
-
-async function confirmNewSchool() {
-  if (!augurState.discoverPreview) return;
-  const name    = document.getElementById('discover-name-input')?.value.trim()   || augurState.discoverPreview.name;
-  const flavour = document.getElementById('discover-flavour-input')?.value.trim() || augurState.discoverPreview.flavour;
-  if (!name) { showError('A school must have a name.'); return; }
-
-  const result = await apiFetch('/api/augur/school/confirm', {
-    name, flavour, spells: augurState.discoverPreview.spells,
-    user_description: augurState.discoverDesc,
-  });
+  const result = await apiFetch('/api/augur/school/create', { plain_name: name, habits });
 
   if (result.error || !result.school) {
     showError(result.error || 'Failed to create school.');
+    if (btn) { btn.disabled = false; btn.textContent = 'CREATE SCHOOL'; }
     return;
   }
 
   schools.push(result.school);
   addSchoolCard(result.school);
   updateHeaderStats();
-  augurState.discoverStage   = 'input';
-  augurState.discoverPreview = null;
-  augurState.discoverDesc    = '';
+  if (result.school.naming_pending || (result.school.spells || []).some(sp => sp.naming_pending)) startNamingPoll();
 
-  // Show success briefly then stay on augur tab
+  augurState.createHabitCount = 3;
+  augurState._habitDraft = null;
+  renderAugurTab();
+
   const el = document.getElementById('menu-content');
   if (el) {
-    renderAugurTab();
     const succEl = document.createElement('div');
-    succEl.style.cssText = 'text-align:center;padding:10px;font-family:Cinzel,serif;font-size:11px;letter-spacing:2px;color:#c9a227;animation:fadein 0.3s ease;';
-    succEl.textContent = `\u2726 ${name.toUpperCase()} INSCRIBED \u2726`;
+    succEl.style.cssText = 'text-align:center;padding:10px;font-family:Cinzel,serif;font-size:11px;letter-spacing:2px;color:#c9a227;';
+    succEl.textContent = '\u2726 SCHOOL INSCRIBED \u2726';
     el.prepend(succEl);
     setTimeout(() => succEl.remove(), 2500);
   }
