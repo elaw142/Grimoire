@@ -459,18 +459,36 @@ function renderDrawer() {
   let spellsHtml = '';
   for (const sp of (school.spells || [])) {
     const desc = sp.description ? `<span class="habit-desc">${escHtml(sp.description)}</span>` : '';
-    const pendingMark = sp.naming_pending
-      ? `<span title="The Augur is forging a name\u2026" style="font-size:10px;color:rgba(201,162,39,0.35);margin-left:4px;">&#10022;</span>`
-      : '';
-    const nameStyle = sp.naming_pending ? 'font-style:italic;color:rgba(201,162,39,0.55);' : '';
-    spellsHtml += `
-      <button class="habit-btn${sp.naming_pending ? ' naming-pending' : ''}" onclick="castSpell(${sp.id},${school.id})" ${deedLoading ? 'disabled' : ''}>
-        <span class="habit-name-wrap">
-          <span class="habit-btn-name" style="${nameStyle}">${escHtml(sp.name)}</span>${pendingMark}${desc}
-        </span>
-        <span class="habit-xp" style="color:${school.color};">+${sp.xp} XP</span>
-      </button>`;
+    if (sp.naming_pending) {
+      spellsHtml += `
+        <button class="habit-btn naming-pending" disabled>
+          <span class="habit-name-wrap">
+            <span class="habit-btn-name" style="font-style:italic;color:rgba(201,162,39,0.4);display:flex;align-items:center;gap:7px;">
+              <span class="ai-spinner" style="width:8px;height:8px;flex-shrink:0;"></span>Augur is naming\u2026
+            </span>${desc}
+          </span>
+          <span class="habit-xp" style="color:rgba(201,162,39,0.25);">\u2014 XP</span>
+        </button>`;
+    } else {
+      spellsHtml += `
+        <button class="habit-btn" onclick="castSpell(${sp.id},${school.id})" ${deedLoading ? 'disabled' : ''}>
+          <span class="habit-name-wrap">
+            <span class="habit-btn-name">${escHtml(sp.name)}</span>${desc}
+          </span>
+          <span class="habit-xp" style="color:${school.color};">+${sp.xp} XP</span>
+        </button>`;
+    }
   }
+
+  const hasPendingSpells = (school.spells || []).some(sp => sp.naming_pending);
+  const pendingBanner = hasPendingSpells
+    ? `<div style="display:flex;align-items:center;gap:9px;font-family:'Crimson Text',serif;font-size:12px;
+                  color:rgba(201,162,39,0.5);margin-bottom:10px;padding:8px 10px;
+                  border:1px solid rgba(201,162,39,0.12);border-radius:4px;background:rgba(201,162,39,0.04);">
+        <div class="ai-spinner" style="flex-shrink:0;"></div>
+        The Augur is forging your incantations &mdash; this may take a moment.
+       </div>`
+    : '';
 
   let oracleSection = '';
   if (!pendingVerdict) {
@@ -526,7 +544,7 @@ function renderDrawer() {
       </div>
     </div>
     <div class="oracle-section-label" style="margin-bottom:8px;">PERFORM AN INCANTATION</div>
-    <div class="habit-list" id="habit-list">${spellsHtml}</div>
+    ${pendingBanner}<div class="habit-list" id="habit-list">${spellsHtml}</div>
     <div class="divider" style="margin:0 0 14px;"></div>
     ${oracleSection}`;
 

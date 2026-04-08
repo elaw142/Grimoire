@@ -875,6 +875,9 @@ a:hover { color: #e8d5a8; }
 
 .habit-btn:hover { background: rgba(201,162,39,0.08); border-color: rgba(201,162,39,0.4); color: #e8d5a8; }
 .habit-btn:disabled { opacity: 0.4; cursor: default; }
+.habit-btn.naming-pending { cursor: not-allowed; animation: naming-pulse 2s ease-in-out infinite; }
+.habit-btn.naming-pending:hover { background: rgba(255,255,255,0.03); border-color: rgba(201,162,39,0.15); }
+@keyframes naming-pulse { 0%, 100% { opacity: 0.45; } 50% { opacity: 0.65; } }
 
 .habit-name-wrap { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .habit-name { font-size: 16px; color: #cfc0a0; }
