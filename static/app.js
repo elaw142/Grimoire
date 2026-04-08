@@ -1844,7 +1844,7 @@ function startNamingPoll() {
   let attempts = 0;
   _namingPollTimer = setInterval(async () => {
     attempts++;
-    if (attempts > 20) { clearInterval(_namingPollTimer); _namingPollTimer = null; return; }
+    if (attempts > 30) { clearInterval(_namingPollTimer); _namingPollTimer = null; return; }
     try {
       const result = await apiFetch('/api/ai/naming-status', null, 'GET');
       if (!result || result.error) return;
@@ -1879,7 +1879,7 @@ function startNamingPoll() {
       }
       if (!anyPending) { clearInterval(_namingPollTimer); _namingPollTimer = null; }
     } catch (_) {}
-  }, 8000);
+  }, 4000);
 }
 
 function onboardFadeReload() {

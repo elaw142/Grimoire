@@ -220,7 +220,7 @@ def require_login_api(f):
     return decorated
 
 
-def call_augur(system_prompt, user_prompt, num_predict=400, retries=1, temperature=0.5, num_ctx=2048):
+def call_augur(system_prompt, user_prompt, num_predict=400, retries=1, temperature=0.5, num_ctx=2048, timeout=90):
     full_prompt = f"{system_prompt}\n\n{user_prompt}"
     for attempt in range(retries + 1):
         try:
@@ -230,7 +230,7 @@ def call_augur(system_prompt, user_prompt, num_predict=400, retries=1, temperatu
                 'stream': False,
                 'format': 'json',
                 'options': {'temperature': temperature, 'num_predict': num_predict, 'num_ctx': num_ctx},
-            }, timeout=90)
+            }, timeout=timeout)
             resp.raise_for_status()
             raw = resp.json().get('response', '')
             raw = re.sub(r'```(?:json)?', '', raw).strip('` \n')
@@ -896,6 +896,20 @@ PLACEHOLDER_SPELL_NAMES = [
 ]
 
 
+def _clear_naming_pending(db_path, school_id=None, spell_ids=None):
+    """Fallback: clear naming_pending flags so placeholders become permanent."""
+    try:
+        con = sqlite3.connect(db_path)
+        if school_id:
+            con.execute('UPDATE schools SET naming_pending=0 WHERE id=?', (school_id,))
+        for sid in (spell_ids or []):
+            con.execute('UPDATE spells SET naming_pending=0 WHERE id=?', (sid,))
+        con.commit()
+        con.close()
+    except Exception as e:
+        log.warning('_clear_naming_pending DB error: %s', e)
+
+
 def _name_custom_school_bg(db_path, school_id, description, habit_descriptions, spell_ids):
     """Background thread: AI generates school name, flavour, and spell names."""
     system = (
@@ -909,31 +923,32 @@ def _name_custom_school_bg(db_path, school_id, description, habit_descriptions, 
     habit_list = '\n'.join(f'{i + 1}. {h}' for i, h in enumerate(habit_descriptions))
     user_msg = f'User goal / domain: {description}\nHabits to name:\n{habit_list}'
 
-    result = call_augur(system, user_msg, num_predict=200, temperature=0.4)
+    result = call_augur(system, user_msg, num_predict=200, temperature=0.4,
+                        num_ctx=512, retries=0, timeout=45)
     if not result:
-        log.warning('_name_custom_school_bg: AI returned nothing for school %s', school_id)
+        log.warning('_name_custom_school_bg: AI failed for school %s — clearing pending', school_id)
+        _clear_naming_pending(db_path, school_id=school_id, spell_ids=spell_ids)
         return
 
     school_name = str(result.get('school_name', '')).strip()[:50]
     flavour = str(result.get('flavour', '')).strip()[:300]
     spell_names = result.get('spell_names', [])
 
-    if not school_name:
-        return
-
     try:
         con = sqlite3.connect(db_path)
         con.execute(
             'UPDATE schools SET name=?, flavour=?, naming_pending=0 WHERE id=?',
-            (school_name, flavour, school_id),
+            (school_name or 'Unnamed School', flavour, school_id),
         )
         for spell_id, name in zip(spell_ids, spell_names):
             name = str(name).strip()[:80]
-            if name:
-                con.execute(
-                    'UPDATE spells SET name=?, naming_pending=0 WHERE id=?',
-                    (name, spell_id),
-                )
+            con.execute(
+                'UPDATE spells SET name=?, naming_pending=0 WHERE id=?',
+                (name or 'Unnamed Rite', spell_id),
+            )
+        # Clear any remaining spell_ids not covered by spell_names
+        for spell_id in spell_ids[len(spell_names):]:
+            con.execute('UPDATE spells SET naming_pending=0 WHERE id=?', (spell_id,))
         con.commit()
         con.close()
         log.info('_name_custom_school_bg: named school %s as "%s"', school_id, school_name)
@@ -949,17 +964,18 @@ def _name_spell_bg(db_path, spell_id, school_context, description):
         'Examples: "Rite of Iron", "Somnium Vitae", "Hydor", "Lexis Arcanum". No markdown.'
     )
     user_msg = f'School: {school_context}\nHabit: {description}'
-    result = call_augur(system, user_msg, num_predict=30, temperature=0.4)
+    result = call_augur(system, user_msg, num_predict=30, temperature=0.4,
+                        num_ctx=256, retries=0, timeout=30)
     if not result:
+        log.warning('_name_spell_bg: AI failed for spell %s — clearing pending', spell_id)
+        _clear_naming_pending(db_path, spell_ids=[spell_id])
         return
 
     name = str(result.get('name', '')).strip()[:80]
-    if not name:
-        return
-
     try:
         con = sqlite3.connect(db_path)
-        con.execute('UPDATE spells SET name=?, naming_pending=0 WHERE id=?', (name, spell_id))
+        con.execute('UPDATE spells SET name=?, naming_pending=0 WHERE id=?',
+                    (name or 'Unnamed Rite', spell_id))
         con.commit()
         con.close()
     except Exception as e:
