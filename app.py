@@ -616,6 +616,57 @@ def api_ai_naming_status():
     return jsonify({'schools': result})
 
 
+@app.route('/api/ai/retrigger-naming', methods=['POST'])
+@require_login_api
+def api_ai_retrigger_naming():
+    """Restart background naming for any schools/spells still flagged naming_pending."""
+    user_id = session['user_id']
+    db = get_db()
+
+    # Schools still waiting to be named — retrigger whole-school naming
+    pending_schools = db.execute(
+        'SELECT id, name, user_description FROM schools WHERE user_id=? AND naming_pending=1',
+        (user_id,),
+    ).fetchall()
+
+    for school in pending_schools:
+        school_id = school['id']
+        description = (school['user_description'] or school['name'] or '').strip()
+        spells = db.execute(
+            'SELECT id, description FROM spells WHERE school_id=? AND naming_pending=1',
+            (school_id,),
+        ).fetchall()
+        spell_ids = [sp['id'] for sp in spells]
+        habit_descs = [sp['description'] for sp in spells if sp['description']]
+        if habit_descs:
+            threading.Thread(
+                target=_name_custom_school_bg,
+                args=(DATABASE, school_id, description, habit_descs, spell_ids),
+                daemon=True,
+            ).start()
+        else:
+            # No habits to name — just clear the flag
+            _clear_naming_pending(DATABASE, school_id=school_id)
+
+    # Individual spells still pending in already-named schools
+    pending_spells = db.execute(
+        'SELECT sp.id, sp.description, s.name AS school_name, s.flavour '
+        'FROM spells sp JOIN schools s ON s.id = sp.school_id '
+        'WHERE s.user_id=? AND sp.naming_pending=1 AND s.naming_pending=0',
+        (user_id,),
+    ).fetchall()
+
+    for sp in pending_spells:
+        ctx = f'{sp["school_name"]} — {sp["flavour"]}' if sp['flavour'] else sp['school_name']
+        threading.Thread(
+            target=_name_spell_bg,
+            args=(DATABASE, sp['id'], ctx, sp['description']),
+            daemon=True,
+        ).start()
+
+    return jsonify({'ok': True})
+
+
 @app.route('/api/onboard/commit', methods=['POST'])
 @require_login_api
 def api_onboard_commit():
@@ -923,8 +974,8 @@ def _name_custom_school_bg(db_path, school_id, description, habit_descriptions, 
     habit_list = '\n'.join(f'{i + 1}. {h}' for i, h in enumerate(habit_descriptions))
     user_msg = f'User goal / domain: {description}\nHabits to name:\n{habit_list}'
 
-    result = call_augur(system, user_msg, num_predict=200, temperature=0.4,
-                        num_ctx=512, retries=0, timeout=45)
+    result = call_augur(system, user_msg, num_predict=100, temperature=0.4,
+                        num_ctx=512, retries=0, timeout=90)
     if not result:
         log.warning('_name_custom_school_bg: AI failed for school %s — clearing pending', school_id)
         _clear_naming_pending(db_path, school_id=school_id, spell_ids=spell_ids)
@@ -964,8 +1015,8 @@ def _name_spell_bg(db_path, spell_id, school_context, description):
         'Examples: "Rite of Iron", "Somnium Vitae", "Hydor", "Lexis Arcanum". No markdown.'
     )
     user_msg = f'School: {school_context}\nHabit: {description}'
-    result = call_augur(system, user_msg, num_predict=30, temperature=0.4,
-                        num_ctx=256, retries=0, timeout=30)
+    result = call_augur(system, user_msg, num_predict=20, temperature=0.4,
+                        num_ctx=256, retries=0, timeout=60)
     if not result:
         log.warning('_name_spell_bg: AI failed for spell %s — clearing pending', spell_id)
         _clear_naming_pending(db_path, spell_ids=[spell_id])

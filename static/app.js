@@ -1894,7 +1894,8 @@ function onboardFadeReload() {
 // Kick off onboarding if needed
 initOnboarding();
 
-// Start polling if any schools/spells still need AI naming
+// Start polling and retrigger naming if any schools/spells are still pending on load
 if (schools.some(s => s.naming_pending || (s.spells || []).some(sp => sp.naming_pending))) {
+  apiFetch('/api/ai/retrigger-naming', {});
   startNamingPoll();
 }
