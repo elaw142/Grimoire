@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">Grimoire app icon</title>
+  <desc id="desc">A gold arcane sigil over a dark spellbook.</desc>
+  <defs>
+    <radialGradient id="bgGlow" cx="50%" cy="37%" r="70%">
+      <stop offset="0%" stop-color="#2a2115"/>
+      <stop offset="58%" stop-color="#100d09"/>
+      <stop offset="100%" stop-color="#070604"/>
+    </radialGradient>
+    <linearGradient id="gold" x1="256" y1="176" x2="768" y2="848" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#f2db91"/>
+      <stop offset="46%" stop-color="#c9a227"/>
+      <stop offset="100%" stop-color="#7f6318"/>
+    </linearGradient>
+    <linearGradient id="pageGold" x1="310" y1="260" x2="714" y2="782" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#342616"/>
+      <stop offset="100%" stop-color="#15100a"/>
+    </linearGradient>
+    <filter id="softGlow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="16" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <rect width="1024" height="1024" rx="216" fill="#0a0806"/>
+  <rect x="52" y="52" width="920" height="920" rx="184" fill="url(#bgGlow)"/>
+  <path d="M238 267c0-34 27-61 61-61h326c93 0 161 68 161 161v390c0 34-27 61-61 61H319c-45 0-81-36-81-81V267Z"
+        fill="#0c0906" stroke="#32240e" stroke-width="22"/>
+  <path d="M318 252h324c61 0 108 47 108 108v387H336c-27 0-48-21-48-48V282c0-17 13-30 30-30Z"
+        fill="url(#pageGold)" stroke="#5c4617" stroke-width="10"/>
+  <path d="M311 717h439" stroke="#876b27" stroke-width="18" stroke-linecap="round" opacity=".58"/>
+  <path d="M640 252v465" stroke="#6e541d" stroke-width="10" opacity=".55"/>
+
+  <g fill="none" stroke="url(#gold)" stroke-linecap="round" stroke-linejoin="round" filter="url(#softGlow)">
+    <circle cx="512" cy="482" r="224" stroke-width="18"/>
+    <path d="M512 212 782 482 512 752 242 482Z" stroke-width="14"/>
+    <path d="M512 164v60M512 740v78M176 482h60M788 482h60" stroke-width="15"/>
+    <path d="M352 322 672 642M672 322 352 642" stroke-width="10" opacity=".72"/>
+    <circle cx="512" cy="482" r="34" fill="#c9a227" stroke="none"/>
+    <circle cx="512" cy="482" r="13" fill="#fff1b8" stroke="none"/>
+  </g>
+</svg>
